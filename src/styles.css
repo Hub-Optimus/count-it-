@@ -72,10 +72,9 @@ button { cursor: pointer; }
 
 @media (min-width: 880px) {
   .app-shell {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 640px) 300px;
+    display: flex;
     justify-content: center;
-    align-items: start;
+    align-items: flex-start;
     gap: 28px;
     max-width: 1180px;
     margin: 0 auto;
@@ -83,7 +82,9 @@ button { cursor: pointer; }
   }
 
   .app-shell .app {
-    max-width: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 640px;
     margin: 0;
     padding: 0;
   }
@@ -96,8 +97,9 @@ button { cursor: pointer; }
   .fab {
     position: sticky;
     top: 20px;
-    right: 0;
+    right: auto;
     left: auto;
+    bottom: auto;
     margin-left: auto;
     margin-bottom: 16px;
   }
@@ -105,19 +107,24 @@ button { cursor: pointer; }
   .side-panel {
     display: flex;
     flex-direction: column;
+    flex: 0 0 300px;
+    width: 300px;
     position: sticky;
     top: 28px;
+    align-self: flex-start;
   }
 
   .tabbar {
     position: sticky;
     top: 28px;
+    align-self: flex-start;
+    flex: 0 0 96px;
+    width: 96px;
     left: auto;
     right: auto;
     bottom: auto;
     height: auto;
     padding-bottom: 0;
-    width: 96px;
     flex-direction: column;
     gap: 6px;
     background: transparent;
