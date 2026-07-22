@@ -70,82 +70,6 @@ button { cursor: pointer; }
 
 .side-panel { display: none; }
 
-@media (min-width: 880px) {
-  .app-shell {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 28px;
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 28px 24px;
-  }
-
-  .app-shell .app {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: 640px;
-    margin: 0;
-    padding: 0;
-  }
-
-  .app:not(.app-shell .app) {
-    max-width: 640px;
-    padding: 0 16px 40px;
-  }
-
-  .fab {
-    position: sticky;
-    top: 20px;
-    right: auto;
-    left: auto;
-    bottom: auto;
-    margin-left: auto;
-    margin-bottom: 16px;
-  }
-
-  .side-panel {
-    display: flex;
-    flex-direction: column;
-    flex: 0 0 300px;
-    width: 300px;
-    position: sticky;
-    top: 28px;
-    align-self: flex-start;
-  }
-
-  .tabbar {
-    position: sticky;
-    top: 28px;
-    align-self: flex-start;
-    flex: 0 0 96px;
-    width: 96px;
-    left: auto;
-    right: auto;
-    bottom: auto;
-    height: auto;
-    padding-bottom: 0;
-    flex-direction: column;
-    gap: 6px;
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border-top: none;
-    border-right: 1px solid var(--line);
-    padding: 4px 10px 4px 0;
-  }
-
-  .tab {
-    flex: none;
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 10px;
-    padding: 12px 10px;
-    border-radius: var(--radius-sm);
-  }
-
-  .tab.on { background: var(--card); }
-}
 
 .app-header {
   display: flex;
@@ -689,3 +613,143 @@ input[type='date'].input { color-scheme: dark; }
 .small { font-size: 13px; color: var(--ink-faint); }
 
 a { color: var(--yellow); }
+
+/* Mobile defaults for elements only meaningful on the desktop shell.
+   Placed after .btn (which also sets display) so these actually win
+   on narrow screens; the desktop @media block below wins over these. */
+.page-title {
+  display: none;
+}
+
+.header-action {
+  display: none;
+}
+
+.tabbar-brand,
+.tabbar-foot {
+  display: none;
+}
+
+/* Desktop overrides intentionally placed last so they win the cascade
+   over any same-specificity base/mobile rule defined earlier. */
+@media (min-width: 880px) {
+  .app-shell {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 28px;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 24px;
+  }
+
+  .app-shell .app {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 640px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .app:not(.app-shell .app) {
+    max-width: 640px;
+    padding: 0 16px 40px;
+  }
+
+  .app-header {
+    padding: 4px 0 22px;
+  }
+
+  .app-header .brand,
+  .app-header .brand-sub {
+    display: none;
+  }
+
+  .page-title {
+    display: block;
+    font-family: var(--display);
+    font-size: 26px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    margin: 0;
+    flex: 1;
+  }
+
+  .header-action {
+    display: inline-flex;
+  }
+
+  .fab {
+    display: none;
+  }
+
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 300px;
+    width: 300px;
+    position: sticky;
+    top: 28px;
+    align-self: flex-start;
+  }
+
+  .tabbar {
+    position: sticky;
+    top: 28px;
+    align-self: flex-start;
+    flex: 0 0 208px;
+    width: 208px;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    height: auto;
+    flex-direction: column;
+    gap: 3px;
+    background: var(--card);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 12px;
+  }
+
+  .tabbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 8px 18px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tabbar-brand-name {
+    font-family: var(--display);
+    font-size: 17px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+
+  .tabbar-foot {
+    display: block;
+    margin-top: 14px;
+    padding: 14px 8px 2px;
+    border-top: 1px solid var(--line);
+  }
+
+  .tabbar-email {
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    word-break: break-all;
+  }
+
+  .tab {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 11px 10px;
+    border-radius: var(--radius-sm);
+  }
+
+  .tab.on { background: var(--bg-deep); }
+}

@@ -117,9 +117,11 @@ function Main({ user }) {
     )
   }
 
+  const pageTitle = { log: 'Workouts', progress: 'Progress', settings: 'Settings' }[tab]
+
   return (
     <div className="app-shell">
-      <TabBar tab={tab} onChange={setTab} />
+      <TabBar tab={tab} onChange={setTab} user={user} />
       <div className="app">
       <header className="app-header">
         <span className="brand">
@@ -127,6 +129,12 @@ function Main({ user }) {
           <span className="brand-name">Count It</span>
         </span>
         <span className="brand-sub">{user.email}</span>
+        <h1 className="page-title">{pageTitle}</h1>
+        {tab === 'log' && (
+          <button className="btn btn-primary header-action" onClick={() => setEditor({ workout: null })}>
+            + New workout
+          </button>
+        )}
       </header>
 
       {tab === 'log' && (

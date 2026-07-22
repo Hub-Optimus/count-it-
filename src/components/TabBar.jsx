@@ -39,7 +39,7 @@ const icons = {
   ),
 }
 
-export default function TabBar({ tab, onChange }) {
+export default function TabBar({ tab, onChange, user }) {
   const tabs = [
     { id: 'log', label: 'Workouts' },
     { id: 'progress', label: 'Progress' },
@@ -47,12 +47,21 @@ export default function TabBar({ tab, onChange }) {
   ]
   return (
     <nav className="tabbar">
+      <div className="tabbar-brand">
+        <Tally size={26} />
+        <span className="tabbar-brand-name">Count It</span>
+      </div>
       {tabs.map((t) => (
         <button key={t.id} className={`tab ${tab === t.id ? 'on' : ''}`} onClick={() => onChange(t.id)} aria-current={tab === t.id ? 'page' : undefined}>
           {icons[t.id]}
           {t.label}
         </button>
       ))}
+      {user && (
+        <div className="tabbar-foot">
+          <span className="tabbar-email">{user.email}</span>
+        </div>
+      )}
     </nav>
   )
 }
