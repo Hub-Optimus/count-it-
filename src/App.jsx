@@ -6,6 +6,7 @@ import Auth from './components/Auth'
 import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
 import Progress from './components/Progress'
+import Trends from './components/Trends'
 import Settings from './components/Settings'
 import Goals from './components/Goals'
 
@@ -137,7 +138,9 @@ function Main({ user }) {
         )
       )}
 
-      {tab === 'progress' && <Progress workouts={workouts ?? []} />}
+      {tab === 'progress' && (
+        <ProgressTab workouts={workouts ?? []} profile={profile} />
+      )}
 
       {tab === 'settings' && (
         <Settings
@@ -151,6 +154,19 @@ function Main({ user }) {
       )}
 
       <TabBar tab={tab} onChange={setTab} />
+    </div>
+  )
+}
+
+function ProgressTab({ workouts, profile }) {
+  const [view, setView] = useState('trends')
+  return (
+    <div>
+      <div className="chip-row">
+        <button className={`chip ${view === 'trends' ? 'on' : ''}`} onClick={() => setView('trends')}>Trends</button>
+        <button className={`chip ${view === 'exercise' ? 'on' : ''}`} onClick={() => setView('exercise')}>Per exercise</button>
+      </div>
+      {view === 'trends' ? <Trends workouts={workouts} profile={profile} /> : <Progress workouts={workouts} />}
     </div>
   )
 }
