@@ -9,6 +9,7 @@ import Progress from './components/Progress'
 import Trends from './components/Trends'
 import Settings from './components/Settings'
 import Goals from './components/Goals'
+import SidePanel from './components/SidePanel'
 
 const UNIT_KEY = 'countit-unit'
 
@@ -117,7 +118,9 @@ function Main({ user }) {
   }
 
   return (
-    <div className="app">
+    <div className="app-shell">
+      <TabBar tab={tab} onChange={setTab} />
+      <div className="app">
       <header className="app-header">
         <span className="brand">
           <Tally size={26} />
@@ -152,8 +155,8 @@ function Main({ user }) {
           onProfileChange={setProfile}
         />
       )}
-
-      <TabBar tab={tab} onChange={setTab} />
+      </div>
+      <SidePanel workouts={workouts ?? []} profile={profile} />
     </div>
   )
 }

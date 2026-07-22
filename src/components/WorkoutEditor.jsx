@@ -280,6 +280,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     className="input"
                     type="text"
                     inputMode="decimal"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    name={`weight-${s.k}`}
                     placeholder="weight"
                     aria-label={`Set ${i + 1} weight`}
                     value={s.weight}
@@ -297,6 +302,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     className="input"
                     type="text"
                     inputMode="numeric"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    name={`reps-${s.k}`}
                     placeholder="reps"
                     aria-label={`Set ${i + 1} reps`}
                     value={s.reps}
