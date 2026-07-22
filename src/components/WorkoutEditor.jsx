@@ -1,0 +1,371 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { insertFullWorkout, updateFullWorkout, deleteWorkout } from '../lib/db'
+import { todayISO } from '../lib/format'
+
+const FEELS = [
+  { value: 'easy', cls: 'f-easy' },
+  { value: 'ok', cls: 'f-ok' },
+  { value: 'heavy', cls: 'f-heavy' },
+  { value: 'very heavy', cls: 'f-vheavy' },
+]
+const FEEL_VALUES = FEELS.map((f) => f.value)
+const BASE_SPLITS = ['Chest + Biceps', 'Back + Triceps', 'Shoulder + Legs']
+const DRAFT_KEY = 'countit-draft-v1'
+
+let seq = 0
+const nextKey = () => `k${++seq}`
+
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '' })
+const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)] })
+
+// db workout -> editable model
+function toModel(workout) {
+  return workout.exercises.map((ex) => ({
+    k: nextKey(),
+    name: ex.name,
+    sets: ex.sets.map((s) => ({
+      k: nextKey(),
+      weight: s.weight ?? '',
+      unit: s.unit,
+      reps: s.reps ?? '',
+      perSide: Boolean(s.per_side),
+      feel: s.feel || '',
+    })),
+  }))
+}
+
+function readDraft(target) {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const d = JSON.parse(raw)
+    return d && d.target === target && Array.isArray(d.exercises) ? d : null
+  } catch {
+    return null
+  }
+}
+
+export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, onClose, onSaved }) {
+  const target = workout?.id ?? 'new'
+  const [date, setDate] = useState(workout?.date ?? todayISO())
+  const [split, setSplit] = useState(workout?.split ?? '')
+  const [notes, setNotes] = useState(workout?.notes ?? '')
+  const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
+  const [draft, setDraft] = useState(() => readDraft(target))
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const dirtyRef = useRef(false)
+  const touch = () => { dirtyRef.current = true }
+
+  const knownSplits = useMemo(() => {
+    const set = new Set(BASE_SPLITS)
+    for (const w of workouts) set.add(w.split)
+    return [...set]
+  }, [workouts])
+
+  // autosave a local draft so a mid-session reload never loses sets
+  useEffect(() => {
+    if (!dirtyRef.current) return
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, split, notes, exercises, ts: Date.now() }))
+      } catch { /* storage full - draft is best effort */ }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [target, date, split, notes, exercises])
+
+  function resumeDraft() {
+    setDate(draft.date)
+    setSplit(draft.split)
+    setNotes(draft.notes)
+    setExercises(draft.exercises.map((ex) => ({ ...ex, k: nextKey(), sets: ex.sets.map((s) => ({ ...s, k: nextKey() })) })))
+    dirtyRef.current = true
+    setDraft(null)
+  }
+
+  function discardDraft() {
+    localStorage.removeItem(DRAFT_KEY)
+    setDraft(null)
+  }
+
+  const hasContent = () =>
+    split.trim() !== (workout?.split ?? '') ||
+    notes.trim() !== (workout?.notes ?? '') ||
+    exercises.some((ex) => ex.name.trim() || ex.sets.some((s) => s.weight !== '' || s.reps !== ''))
+
+  function updateExercise(k, patch) {
+    touch()
+    setExercises((list) => list.map((ex) => (ex.k === k ? { ...ex, ...patch } : ex)))
+  }
+
+  function updateSet(exK, setK, patch) {
+    touch()
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.k === exK ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, ...patch } : s)) } : ex
+      )
+    )
+  }
+
+  function addSet(exK) {
+    touch()
+    setExercises((list) =>
+      list.map((ex) => {
+        if (ex.k !== exK) return ex
+        const last = ex.sets[ex.sets.length - 1]
+        const copy = last
+          ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, feel: '' }
+          : blankSet(defaultUnit)
+        return { ...ex, sets: [...ex.sets, copy] }
+      })
+    )
+  }
+
+  function removeSet(exK, setK) {
+    touch()
+    setExercises((list) => list.map((ex) => (ex.k === exK ? { ...ex, sets: ex.sets.filter((s) => s.k !== setK) } : ex)))
+  }
+
+  function addExercise() {
+    touch()
+    setExercises((list) => [...list, blankExercise(defaultUnit)])
+  }
+
+  function removeExercise(exK) {
+    const ex = exercises.find((e) => e.k === exK)
+    const filled = ex && (ex.name.trim() || ex.sets.some((s) => s.weight !== '' || s.reps !== ''))
+    if (filled && !window.confirm(`Remove ${ex.name.trim() || 'this exercise'}?`)) return
+    touch()
+    setExercises((list) => list.filter((e) => e.k !== exK))
+  }
+
+  function copyLastOfSplit() {
+    const src = workouts.find((w) => w.split === split && w.id !== workout?.id)
+    if (!src) return
+    if (exercises.some((ex) => ex.name.trim() || ex.sets.some((s) => s.weight !== '' || s.reps !== '')) &&
+        !window.confirm(`Replace the current entries with your ${src.date} session?`)) return
+    touch()
+    setExercises(toModel(src).map((ex) => ({ ...ex, sets: ex.sets.map((s) => ({ ...s, feel: '' })) })))
+  }
+
+  function cancel() {
+    if (dirtyRef.current && hasContent() && !window.confirm('Discard changes?')) return
+    if (dirtyRef.current) localStorage.removeItem(DRAFT_KEY) // keep an un-resumed draft recoverable
+    onClose()
+  }
+
+  async function removeWholeWorkout() {
+    if (!window.confirm('Delete this whole workout? This cannot be undone.')) return
+    setSaving(true)
+    try {
+      await deleteWorkout(workout.id)
+      localStorage.removeItem(DRAFT_KEY)
+      onSaved()
+    } catch (e) {
+      setError(e.message || 'Could not delete. Check your connection and try again.')
+      setSaving(false)
+    }
+  }
+
+  async function save() {
+    setError('')
+    const cleanSplit = split.trim()
+    if (!cleanSplit) { setError('Give the session a split name, e.g. Chest + Biceps.'); return }
+
+    const payload = exercises
+      .map((ex) => ({
+        name: ex.name.trim(),
+        sets: ex.sets
+          .filter((s) => s.weight !== '' || s.reps !== '')
+          .map((s) => {
+            const w = s.weight === '' ? null : parseFloat(s.weight)
+            const r = s.reps === '' ? null : parseInt(s.reps, 10)
+            return {
+              weight: Number.isFinite(w) ? w : null,
+              unit: s.unit,
+              reps: Number.isFinite(r) ? r : null,
+              perSide: s.perSide,
+              feel: s.feel.trim() || null,
+            }
+          }),
+      }))
+      .filter((ex) => ex.name && ex.sets.length)
+
+    if (!payload.length) { setError('Add at least one exercise with a set.'); return }
+
+    setSaving(true)
+    try {
+      const body = { date, split: cleanSplit, notes: notes.trim() || null, exercises: payload }
+      if (workout) await updateFullWorkout(user.id, workout.id, body)
+      else await insertFullWorkout(user.id, body)
+      localStorage.removeItem(DRAFT_KEY)
+      onSaved()
+    } catch (e) {
+      setError(e.message || 'Could not save. Your entries are kept on this phone - try again when you have signal.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="app">
+      <div className="editor-topbar">
+        <button className="btn btn-ghost" onClick={cancel}>Cancel</button>
+        <div className="screen-title">{workout ? 'Edit session' : 'New session'}</div>
+        <button className="btn btn-primary" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+
+      {draft && (
+        <div className="banner">
+          <span>You have an unsaved draft from this device.</span>
+          <span className="banner-actions">
+            <button className="btn btn-ghost" onClick={discardDraft}>Discard</button>
+            <button className="btn" onClick={resumeDraft}>Resume</button>
+          </span>
+        </div>
+      )}
+
+      <div className="field">
+        <label className="label" htmlFor="w-date">Date</label>
+        <input id="w-date" className="input" type="date" value={date} onChange={(e) => { touch(); setDate(e.target.value) }} />
+      </div>
+
+      <div className="field">
+        <label className="label" htmlFor="w-split">Split</label>
+        <div className="chip-row">
+          {knownSplits.map((sp) => (
+            <button key={sp} className={`chip ${split === sp ? 'on' : ''}`} onClick={() => { touch(); setSplit(sp) }}>
+              {sp}
+            </button>
+          ))}
+        </div>
+        <input
+          id="w-split"
+          className="input"
+          placeholder="or type your own"
+          value={split}
+          onChange={(e) => { touch(); setSplit(e.target.value) }}
+        />
+      </div>
+
+      {!workout && split && workouts.some((w) => w.split === split) && (
+        <button className="btn btn-block" onClick={copyLastOfSplit}>
+          Copy last {split} session
+        </button>
+      )}
+
+      <hr className="hr" />
+
+      {exercises.map((ex, exIdx) => (
+        <div className="exercise-block" key={ex.k}>
+          <div className="exercise-head">
+            <input
+              className="input"
+              list="exercise-names"
+              placeholder={`Exercise ${exIdx + 1}`}
+              value={ex.name}
+              onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
+            />
+            <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
+          </div>
+
+          {ex.sets.map((s, i) => {
+            const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
+            return (
+              <div key={s.k}>
+                <div className="set-row">
+                  <span className="set-index">{i + 1}</span>
+                  <input
+                    className="input"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="weight"
+                    aria-label={`Set ${i + 1} weight`}
+                    value={s.weight}
+                    onChange={(e) => updateSet(ex.k, s.k, { weight: e.target.value })}
+                  />
+                  <button
+                    className="mini-btn"
+                    onClick={() => updateSet(ex.k, s.k, { unit: s.unit === 'kg' ? 'lbs' : 'kg' })}
+                    aria-label="Toggle unit"
+                  >
+                    {s.unit === 'kg' ? 'kg' : 'lb'}
+                  </button>
+                  <span className="times">×</span>
+                  <input
+                    className="input"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="reps"
+                    aria-label={`Set ${i + 1} reps`}
+                    value={s.reps}
+                    onChange={(e) => updateSet(ex.k, s.k, { reps: e.target.value })}
+                  />
+                  <button
+                    className={`mini-btn ${s.perSide ? 'on' : ''}`}
+                    onClick={() => updateSet(ex.k, s.k, { perSide: !s.perSide })}
+                    title="Weight is per side / per hand"
+                  >
+                    /side
+                  </button>
+                  <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>–</button>
+                </div>
+                <div className="set-feel">
+                  {customFeel ? (
+                    <span className="feel-note">
+                      <span>{s.feel}</span>
+                      <button onClick={() => updateSet(ex.k, s.k, { feel: '' })} aria-label="Clear note">✕</button>
+                    </span>
+                  ) : (
+                    FEELS.map((f) => (
+                      <button
+                        key={f.value}
+                        className={`chip feel-chip ${f.cls} ${s.feel === f.value ? 'on' : ''}`}
+                        onClick={() => updateSet(ex.k, s.k, { feel: s.feel === f.value ? '' : f.value })}
+                      >
+                        {f.value}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
+        </div>
+      ))}
+
+      <datalist id="exercise-names">
+        {exerciseNames.map((n) => <option key={n} value={n} />)}
+      </datalist>
+
+      <button className="btn btn-block" onClick={addExercise}>+ Exercise</button>
+
+      <div className="field" style={{ marginTop: 14 }}>
+        <label className="label" htmlFor="w-notes">Session notes</label>
+        <textarea
+          id="w-notes"
+          className="textarea"
+          placeholder="Cardio, aches, anything worth remembering"
+          value={notes}
+          onChange={(e) => { touch(); setNotes(e.target.value) }}
+        />
+      </div>
+
+      {error && <p className="error">{error}</p>}
+
+      <div className="editor-footer">
+        {workout && (
+          <button className="btn btn-danger" onClick={removeWholeWorkout} disabled={saving}>
+            Delete workout
+          </button>
+        )}
+        <button className="btn btn-primary btn-block" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save session'}
+        </button>
+      </div>
+    </div>
+  )
+}
