@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { toKg, fmtWeight, fmtVolume } from '../lib/format'
+import { groupFor } from '../lib/exerciseLibrary'
 
 const e1rm = (weightKg, reps) => {
   const r = Math.min(reps || 0, 12)
@@ -20,10 +21,13 @@ export default function SidePanel({ workouts, profile }) {
     let weekVolume = 0
     let totalVolume = 0
     let bestEver = 0
-    const splitCounts = new Map() // split -> { count, lastDate }
+    const muscleCounts = new Map() // group -> session count (a session can count toward several groups)
     for (const w of workouts) {
       const inWeek = daysAgo(w.date) < 7
+      const groupsThisSession = new Set()
       for (const ex of w.exercises) {
+        const g = groupFor(ex.name)
+        if (g) groupsThisSession.add(g)
         for (const s of ex.sets) {
           if (s.weight == null || !s.reps) continue
           const kg = toKg(Number(s.weight), s.unit)
@@ -36,15 +40,15 @@ export default function SidePanel({ workouts, profile }) {
         }
       }
       if (inWeek) weekCount += 1
-      const entry = splitCounts.get(w.split) || { count: 0, lastDate: w.date }
-      entry.count += 1
-      if (w.date > entry.lastDate) entry.lastDate = w.date
-      splitCounts.set(w.split, entry)
+      for (const g of groupsThisSession) {
+        muscleCounts.set(g, (muscleCounts.get(g) || 0) + 1)
+      }
     }
-    const splits = [...splitCounts.entries()]
-      .map(([split, v]) => ({ split, ...v }))
+    const muscles = [...muscleCounts.entries()]
+      .map(([group, count]) => ({ group, count }))
       .sort((a, b) => b.count - a.count)
-    return { weekCount, weekVolume, totalVolume, bestEver, splits, totalSessions: workouts.length }
+      .slice(0, 6)
+    return { weekCount, weekVolume, totalVolume, bestEver, muscles, totalSessions: workouts.length }
   }, [workouts])
 
   const last = workouts[0]
@@ -95,13 +99,13 @@ export default function SidePanel({ workouts, profile }) {
         )}
       </div>
 
-      {stats.splits.length > 0 && (
+      {stats.muscles.length > 0 && (
         <div className="card">
-          <label className="label">Split breakdown</label>
-          {stats.splits.map((s) => (
-            <div className="session-row" key={s.split}>
-              <span className="session-date" style={{ minWidth: 0, flex: 1 }}>{s.split}</span>
-              <span className="session-best">{s.count}×</span>
+          <label className="label">Muscle focus</label>
+          {stats.muscles.map((m) => (
+            <div className="session-row" key={m.group}>
+              <span className="session-date" style={{ minWidth: 0, flex: 1 }}>{m.group}</span>
+              <span className="session-best">{m.count}×</span>
             </div>
           ))}
         </div>
@@ -110,7 +114,7 @@ export default function SidePanel({ workouts, profile }) {
       {last && (
         <div className="card">
           <label className="label">Last session</label>
-          <p className="small" style={{ margin: 0 }}>{last.split} · {last.exercises.length} exercises</p>
+          <p className="small" style={{ margin: 0 }}>{last.split || 'Workout'} · {last.exercises.length} exercises</p>
         </div>
       )}
     </aside>

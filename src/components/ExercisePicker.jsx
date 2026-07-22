@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react'
-import { GROUPS, EXERCISES } from '../lib/exerciseLibrary'
+import { GROUPS, EXERCISES, groupFor } from '../lib/exerciseLibrary'
 
 // Minimal line icons per muscle group — consistent stroke style with the rest of the app.
 const groupIcons = {
   Chest: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 8c2-3 6-3 8 0 2-3 6-3 8 0-1 6-4 10-8 12-4-2-7-6-8-12Z" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="2" y1="12" x2="4.5" y2="12" />
+      <rect x="4.5" y="8" width="2.5" height="8" rx="1" />
+      <rect x="17" y="8" width="2.5" height="8" rx="1" />
+      <line x1="7" y1="12" x2="17" y2="12" />
+      <line x1="19.5" y1="12" x2="22" y2="12" />
     </svg>
   ),
   Back: (
@@ -59,7 +63,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
   const [group, setGroup] = useState('All')
 
   const recent = useMemo(
-    () => recentNames.slice(0, 8).map((name) => ({ name, group: 'Other' })),
+    () => recentNames.slice(0, 8).map((name) => ({ name, group: groupFor(name) || 'Other' })),
     [recentNames]
   )
 
@@ -70,7 +74,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
     const inLib = EXERCISES.filter((e) => e.name.toLowerCase().includes(q))
     const inRecent = recentNames
       .filter((n) => n.toLowerCase().includes(q) && !inLib.some((e) => e.name === n))
-      .map((name) => ({ name, group: 'Other' }))
+      .map((name) => ({ name, group: groupFor(name) || 'Other' }))
     return [...inRecent, ...inLib]
   }, [q, recentNames])
 
@@ -135,7 +139,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
                   <div className="picker-section-title">Recently used</div>
                   {recent.map((e) => (
                     <button key={e.name} className="picker-row" onClick={() => pick(e.name)}>
-                      <span className="picker-row-icon">{groupIcons.Other}</span>
+                      <span className="picker-row-icon">{groupIcons[e.group] || groupIcons.Other}</span>
                       {e.name}
                     </button>
                   ))}

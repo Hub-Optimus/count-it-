@@ -1,4 +1,5 @@
 import { toKg, fmtVolume } from '../lib/format'
+import { groupFor } from '../lib/exerciseLibrary'
 import { Tally } from './TabBar'
 
 function volumeKg(workout) {
@@ -10,6 +11,16 @@ function volumeKg(workout) {
     }
   }
   return total
+}
+
+// First-appearance-ordered, deduped muscle groups actually trained in this session.
+function musclesFor(workout) {
+  const seen = []
+  for (const ex of workout.exercises) {
+    const g = groupFor(ex.name)
+    if (g && !seen.includes(g)) seen.push(g)
+  }
+  return seen
 }
 
 export default function WorkoutList({ workouts, onOpen }) {
@@ -29,6 +40,8 @@ export default function WorkoutList({ workouts, onOpen }) {
         const d = new Date(w.date + 'T00:00:00')
         const setCount = w.exercises.reduce((n, ex) => n + ex.sets.length, 0)
         const vol = volumeKg(w)
+        const muscles = musclesFor(w)
+        const heading = w.split || (muscles.length ? muscles.join(' + ') : 'Workout')
         return (
           <button key={w.id} className="workout-card" onClick={() => onOpen(w)}>
             <span className="wc-date">
@@ -36,10 +49,11 @@ export default function WorkoutList({ workouts, onOpen }) {
               <span className="wc-month">{d.toLocaleDateString('en-IN', { month: 'short' })}</span>
             </span>
             <span>
-              <span className="wc-split">{w.split}</span>
+              <span className="wc-split">{heading}</span>
               <div className="wc-meta">
                 {w.exercises.length} exercises · {setCount} sets{vol > 0 ? ` · ${fmtVolume(vol)}` : ''}
               </div>
+              {w.split && muscles.length > 0 && <div className="wc-notes">{muscles.join(' + ')}</div>}
               {w.notes && <div className="wc-notes">{w.notes}</div>}
             </span>
           </button>
