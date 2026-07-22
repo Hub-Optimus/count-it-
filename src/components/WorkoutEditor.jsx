@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout } from '../lib/db'
 import { todayISO } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
+import { imageFor } from '../lib/exerciseLibrary'
 
 const FEELS = [
   { value: 'easy', cls: 'f-easy' },
@@ -48,7 +49,6 @@ function readDraft(target) {
 export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, onClose, onSaved }) {
   const target = workout?.id ?? 'new'
   const [date, setDate] = useState(workout?.date ?? todayISO())
-  const [title, setTitle] = useState(workout?.split ?? '')
   const [notes, setNotes] = useState(workout?.notes ?? '')
   const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
   const [draft, setDraft] = useState(() => readDraft(target))
@@ -58,27 +58,20 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   const dirtyRef = useRef(false)
   const touch = () => { dirtyRef.current = true }
 
-  // past session names, offered as datalist suggestions only — never required
-  const pastTitles = useMemo(() => {
-    const set = new Set()
-    for (const w of workouts) if (w.split) set.add(w.split)
-    return [...set]
-  }, [workouts])
 
   // autosave a local draft so a mid-session reload never loses sets
   useEffect(() => {
     if (!dirtyRef.current) return
     const t = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, split: title, notes, exercises, ts: Date.now() }))
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, notes, exercises, ts: Date.now() }))
       } catch { /* storage full - draft is best effort */ }
     }, 350)
     return () => clearTimeout(t)
-  }, [target, date, title, notes, exercises])
+  }, [target, date, notes, exercises])
 
   function resumeDraft() {
     setDate(draft.date)
-    setTitle(draft.split)
     setNotes(draft.notes)
     setExercises(draft.exercises.map((ex) => ({ ...ex, k: nextKey(), sets: ex.sets.map((s) => ({ ...s, k: nextKey() })) })))
     dirtyRef.current = true
@@ -91,7 +84,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   const hasContent = () =>
-    title.trim() !== (workout?.split ?? '') ||
     notes.trim() !== (workout?.notes ?? '') ||
     exercises.some((ex) => ex.name.trim() || ex.sets.some((s) => s.weight !== '' || s.reps !== ''))
 
@@ -195,7 +187,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
     setSaving(true)
     try {
-      const body = { date, split: title.trim() || null, notes: notes.trim() || null, exercises: payload }
+      const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
       localStorage.removeItem(DRAFT_KEY)
@@ -231,21 +223,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         <input id="w-date" className="input" type="date" value={date} onChange={(e) => { touch(); setDate(e.target.value) }} />
       </div>
 
-      <div className="field">
-        <label className="label" htmlFor="w-title">Session name <span style={{ textTransform: 'none', fontWeight: 400 }}>(optional)</span></label>
-        <input
-          id="w-title"
-          className="input"
-          list="past-titles"
-          placeholder="e.g. Push Day — or leave blank"
-          value={title}
-          onChange={(e) => { touch(); setTitle(e.target.value) }}
-        />
-        <datalist id="past-titles">
-          {pastTitles.map((t) => <option key={t} value={t} />)}
-        </datalist>
-      </div>
-
       {!workout && workouts.length > 0 && (
         <button className="btn btn-block" onClick={copyPreviousSession}>
           Copy previous session
@@ -257,6 +234,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       {exercises.map((ex, exIdx) => (
         <div className="exercise-block" key={ex.k}>
           <div className="exercise-head">
+            {imageFor(ex.name) && (
+              <img className="exercise-thumb" src={imageFor(ex.name)} alt="" width="40" height="40" />
+            )}
             <input
               className="input"
               placeholder={`Exercise ${exIdx + 1}`}
