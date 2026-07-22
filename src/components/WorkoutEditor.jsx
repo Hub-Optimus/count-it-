@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout } from '../lib/db'
 import { todayISO } from '../lib/format'
+import ExercisePicker from './ExercisePicker'
 
 const FEELS = [
   { value: 'easy', cls: 'f-easy' },
@@ -9,7 +10,6 @@ const FEELS = [
   { value: 'very heavy', cls: 'f-vheavy' },
 ]
 const FEEL_VALUES = FEELS.map((f) => f.value)
-const BASE_SPLITS = ['Chest + Biceps', 'Back + Triceps', 'Shoulder + Legs']
 const DRAFT_KEY = 'countit-draft-v1'
 
 let seq = 0
@@ -48,18 +48,20 @@ function readDraft(target) {
 export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, onClose, onSaved }) {
   const target = workout?.id ?? 'new'
   const [date, setDate] = useState(workout?.date ?? todayISO())
-  const [split, setSplit] = useState(workout?.split ?? '')
+  const [title, setTitle] = useState(workout?.split ?? '')
   const [notes, setNotes] = useState(workout?.notes ?? '')
   const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
   const [draft, setDraft] = useState(() => readDraft(target))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
   const dirtyRef = useRef(false)
   const touch = () => { dirtyRef.current = true }
 
-  const knownSplits = useMemo(() => {
-    const set = new Set(BASE_SPLITS)
-    for (const w of workouts) set.add(w.split)
+  // past session names, offered as datalist suggestions only — never required
+  const pastTitles = useMemo(() => {
+    const set = new Set()
+    for (const w of workouts) if (w.split) set.add(w.split)
     return [...set]
   }, [workouts])
 
@@ -68,15 +70,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     if (!dirtyRef.current) return
     const t = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, split, notes, exercises, ts: Date.now() }))
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, split: title, notes, exercises, ts: Date.now() }))
       } catch { /* storage full - draft is best effort */ }
     }, 350)
     return () => clearTimeout(t)
-  }, [target, date, split, notes, exercises])
+  }, [target, date, title, notes, exercises])
 
   function resumeDraft() {
     setDate(draft.date)
-    setSplit(draft.split)
+    setTitle(draft.split)
     setNotes(draft.notes)
     setExercises(draft.exercises.map((ex) => ({ ...ex, k: nextKey(), sets: ex.sets.map((s) => ({ ...s, k: nextKey() })) })))
     dirtyRef.current = true
@@ -89,7 +91,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   const hasContent = () =>
-    split.trim() !== (workout?.split ?? '') ||
+    title.trim() !== (workout?.split ?? '') ||
     notes.trim() !== (workout?.notes ?? '') ||
     exercises.some((ex) => ex.name.trim() || ex.sets.some((s) => s.weight !== '' || s.reps !== ''))
 
@@ -139,8 +141,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setExercises((list) => list.filter((e) => e.k !== exK))
   }
 
-  function copyLastOfSplit() {
-    const src = workouts.find((w) => w.split === split && w.id !== workout?.id)
+  function copyPreviousSession() {
+    const src = workouts.find((w) => w.id !== workout?.id)
     if (!src) return
     if (exercises.some((ex) => ex.name.trim() || ex.sets.some((s) => s.weight !== '' || s.reps !== '')) &&
         !window.confirm(`Replace the current entries with your ${src.date} session?`)) return
@@ -169,8 +171,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   async function save() {
     setError('')
-    const cleanSplit = split.trim()
-    if (!cleanSplit) { setError('Give the session a split name, e.g. Chest + Biceps.'); return }
 
     const payload = exercises
       .map((ex) => ({
@@ -195,7 +195,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
     setSaving(true)
     try {
-      const body = { date, split: cleanSplit, notes: notes.trim() || null, exercises: payload }
+      const body = { date, split: title.trim() || null, notes: notes.trim() || null, exercises: payload }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
       localStorage.removeItem(DRAFT_KEY)
@@ -232,26 +232,23 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       </div>
 
       <div className="field">
-        <label className="label" htmlFor="w-split">Split</label>
-        <div className="chip-row">
-          {knownSplits.map((sp) => (
-            <button key={sp} className={`chip ${split === sp ? 'on' : ''}`} onClick={() => { touch(); setSplit(sp) }}>
-              {sp}
-            </button>
-          ))}
-        </div>
+        <label className="label" htmlFor="w-title">Session name <span style={{ textTransform: 'none', fontWeight: 400 }}>(optional)</span></label>
         <input
-          id="w-split"
+          id="w-title"
           className="input"
-          placeholder="or type your own"
-          value={split}
-          onChange={(e) => { touch(); setSplit(e.target.value) }}
+          list="past-titles"
+          placeholder="e.g. Push Day — or leave blank"
+          value={title}
+          onChange={(e) => { touch(); setTitle(e.target.value) }}
         />
+        <datalist id="past-titles">
+          {pastTitles.map((t) => <option key={t} value={t} />)}
+        </datalist>
       </div>
 
-      {!workout && split && workouts.some((w) => w.split === split) && (
-        <button className="btn btn-block" onClick={copyLastOfSplit}>
-          Copy last {split} session
+      {!workout && workouts.length > 0 && (
+        <button className="btn btn-block" onClick={copyPreviousSession}>
+          Copy previous session
         </button>
       )}
 
@@ -262,13 +259,25 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           <div className="exercise-head">
             <input
               className="input"
-              list="exercise-names"
               placeholder={`Exercise ${exIdx + 1}`}
               value={ex.name}
               onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
             />
+            <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
+              </svg>
+            </button>
             <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
           </div>
+
+          {pickerFor === ex.k && (
+            <ExercisePicker
+              recentNames={exerciseNames}
+              onSelect={(name) => updateExercise(ex.k, { name })}
+              onClose={() => setPickerFor(null)}
+            />
+          )}
 
           {ex.sets.map((s, i) => {
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
@@ -346,10 +355,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
         </div>
       ))}
-
-      <datalist id="exercise-names">
-        {exerciseNames.map((n) => <option key={n} value={n} />)}
-      </datalist>
 
       <button className="btn btn-block" onClick={addExercise}>+ Exercise</button>
 
