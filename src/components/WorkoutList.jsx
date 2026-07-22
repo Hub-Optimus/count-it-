@@ -18,7 +18,7 @@ export default function WorkoutList({ workouts, onOpen }) {
       <div className="empty">
         <Tally size={44} />
         <p>No sessions yet.</p>
-        <p className="small">Tap + to log your first workout, or import your July logs from Settings.</p>
+        <p className="small">Tap + to log your first workout.</p>
       </div>
     )
   }

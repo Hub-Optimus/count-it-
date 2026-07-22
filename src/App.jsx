@@ -127,7 +127,6 @@ function Main({ user }) {
           workouts={workouts ?? []}
           defaultUnit={defaultUnit}
           onUnitChange={changeUnit}
-          onImported={load}
         />
       )}
 
