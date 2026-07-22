@@ -1,61 +1,36 @@
 import { useMemo, useState } from 'react'
-import { GROUPS, EXERCISES, groupFor } from '../lib/exerciseLibrary'
+import { GROUPS, EXERCISES, groupFor, imageFor } from '../lib/exerciseLibrary'
 
-// Minimal line icons per muscle group — consistent stroke style with the rest of the app.
-const groupIcons = {
-  Chest: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="2" y1="12" x2="4.5" y2="12" />
-      <rect x="4.5" y="8" width="2.5" height="8" rx="1" />
-      <rect x="17" y="8" width="2.5" height="8" rx="1" />
-      <line x1="7" y1="12" x2="17" y2="12" />
-      <line x1="19.5" y1="12" x2="22" y2="12" />
-    </svg>
-  ),
-  Back: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v18M12 3 5 9M12 3l7 6M7 13l-2 8M17 13l2 8" />
-    </svg>
-  ),
-  Shoulders: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 15c1-6 5-9 9-9s8 3 9 9" />
-      <circle cx="6" cy="16" r="2" /><circle cx="18" cy="16" r="2" />
-    </svg>
-  ),
-  Legs: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 3h6l1 8-2 10h-2l-1-8-1 8H8l-1-10Z" />
-    </svg>
-  ),
-  Biceps: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 18c-1-5 0-9 3-11 3-2 7-1 8 2 1 2 0 4-2 4-1 3-4 5-9 5Z" />
-    </svg>
-  ),
-  Triceps: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 5c6 0 10 4 10 9 0 3-2 5-5 5" />
-      <path d="M11 14l3 3-3 3" />
-    </svg>
-  ),
-  Core: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <rect x="7" y="4" width="4" height="4" rx="0.5" /><rect x="13" y="4" width="4" height="4" rx="0.5" />
-      <rect x="7" y="10" width="4" height="4" rx="0.5" /><rect x="13" y="10" width="4" height="4" rx="0.5" />
-      <rect x="7" y="16" width="4" height="4" rx="0.5" /><rect x="13" y="16" width="4" height="4" rx="0.5" />
-    </svg>
-  ),
-  Cardio: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.5 8.5c0 5-8.5 10.5-8.5 10.5S3.5 13.5 3.5 8.5a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20.5 8.5Z" />
-    </svg>
-  ),
-  Other: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  ),
+// Small icons didn't read clearly at this size (confirmed: several were
+// mistaken for unrelated symbols). Colored letter badges are unambiguous
+// at any size and match how Strong/Hevy tag exercise categories.
+const GROUP_BADGE = {
+  Chest: { abbr: 'CH', color: '#e5484d' },
+  Back: { abbr: 'BK', color: '#4e86f7' },
+  Shoulders: { abbr: 'SH', color: '#f5b93b' },
+  Legs: { abbr: 'LG', color: '#57a35f' },
+  Biceps: { abbr: 'BI', color: '#c77dff' },
+  Triceps: { abbr: 'TR', color: '#4dd0c8' },
+  Core: { abbr: 'CO', color: '#ff9f5b' },
+  Cardio: { abbr: 'CD', color: '#f06fa8' },
+  Other: { abbr: '?', color: '#767b84' },
+}
+
+function GroupBadge({ group }) {
+  const b = GROUP_BADGE[group] || GROUP_BADGE.Other
+  return (
+    <span className="group-badge" style={{ background: b.color }} aria-hidden="true">
+      {b.abbr}
+    </span>
+  )
+}
+
+function RowIcon({ name, group }) {
+  const src = imageFor(name)
+  if (src) {
+    return <img className="picker-row-thumb" src={src} alt="" width="32" height="32" loading="lazy" />
+  }
+  return <GroupBadge group={group} />
 }
 
 export default function ExercisePicker({ recentNames = [], onSelect, onClose }) {
@@ -114,7 +89,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
             <button className={`chip ${group === 'All' ? 'on' : ''}`} onClick={() => setGroup('All')}>All</button>
             {GROUPS.map((g) => (
               <button key={g} className={`chip picker-group-chip ${group === g ? 'on' : ''}`} onClick={() => setGroup(g)}>
-                {groupIcons[g]}{g}
+                <GroupBadge group={g} />{g}
               </button>
             ))}
           </div>
@@ -125,7 +100,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
             filtered.length > 0 ? (
               filtered.map((e) => (
                 <button key={e.name} className="picker-row" onClick={() => pick(e.name)}>
-                  <span className="picker-row-icon">{groupIcons[e.group] || groupIcons.Other}</span>
+                  <RowIcon name={e.name} group={e.group} />
                   {e.name}
                 </button>
               ))
@@ -139,7 +114,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
                   <div className="picker-section-title">Recently used</div>
                   {recent.map((e) => (
                     <button key={e.name} className="picker-row" onClick={() => pick(e.name)}>
-                      <span className="picker-row-icon">{groupIcons[e.group] || groupIcons.Other}</span>
+                      <RowIcon name={e.name} group={e.group} />
                       {e.name}
                     </button>
                   ))}
@@ -150,7 +125,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
                   <div className="picker-section-title">{g}</div>
                   {list.map((e) => (
                     <button key={e.name} className="picker-row" onClick={() => pick(e.name)}>
-                      <span className="picker-row-icon">{groupIcons[g]}</span>
+                      <RowIcon name={e.name} group={g} />
                       {e.name}
                     </button>
                   ))}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { toKg, KG_PER_LB, fmtWeight, fmtVolume, fmtDate } from '../lib/format'
+import { imageFor } from '../lib/exerciseLibrary'
 import { Tally } from './TabBar'
 
 // Build: exercise name -> { sessions: [{date, bestKg, bestSet, volKg}], allLbs }
@@ -109,11 +110,14 @@ export default function Progress({ workouts }) {
     <div>
       <div className="ex-picker">
         <label className="label" htmlFor="ex-select">Exercise</label>
-        <select id="ex-select" value={name} onChange={(e) => setPicked(e.target.value)}>
-          {names.map((n) => (
-            <option key={n} value={n}>{n} ({stats.get(n).sessions.length})</option>
-          ))}
-        </select>
+        <div className="ex-picker-row">
+          {imageFor(name) && <img className="exercise-thumb" src={imageFor(name)} alt="" width="40" height="40" />}
+          <select id="ex-select" value={name} onChange={(e) => setPicked(e.target.value)}>
+            {names.map((n) => (
+              <option key={n} value={n}>{n} ({stats.get(n).sessions.length})</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="chart-wrap">

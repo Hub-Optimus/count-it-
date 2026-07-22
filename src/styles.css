@@ -382,6 +382,15 @@ input[type='date'].input { color-scheme: dark; }
   margin-bottom: 8px;
 }
 
+.exercise-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  object-fit: cover;
+  background: var(--bg-deep);
+}
+
 .exercise-head .input { font-weight: 700; }
 
 .set-row {
@@ -506,10 +515,27 @@ input[type='date'].input { color-scheme: dark; }
 
 .picker-row:active { background: var(--card); }
 
-.picker-row-icon {
+.group-badge {
   flex: none;
-  display: flex;
-  color: var(--ink-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #0b0c0e;
+}
+
+.picker-row-thumb {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: var(--bg-deep);
 }
 
 .picker-custom {
@@ -639,6 +665,14 @@ input[type='date'].input { color-scheme: dark; }
 .session-vol { color: var(--ink-faint); font-size: 13px; font-variant-numeric: tabular-nums; }
 
 .ex-picker { margin: 4px 0 8px; }
+
+.ex-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ex-picker-row select { flex: 1; }
 
 .ex-picker select {
   width: 100%;
