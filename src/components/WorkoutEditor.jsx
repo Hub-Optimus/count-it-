@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout } from '../lib/db'
 import { todayISO } from '../lib/format'
+import ExercisePicker from './ExercisePicker'
 
 const FEELS = [
   { value: 'easy', cls: 'f-easy' },
@@ -54,6 +55,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   const [draft, setDraft] = useState(() => readDraft(target))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
   const dirtyRef = useRef(false)
   const touch = () => { dirtyRef.current = true }
 
@@ -267,8 +269,21 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               value={ex.name}
               onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
             />
+            <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
+              </svg>
+            </button>
             <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
           </div>
+
+          {pickerFor === ex.k && (
+            <ExercisePicker
+              recentNames={exerciseNames}
+              onSelect={(name) => updateExercise(ex.k, { name })}
+              onClose={() => setPickerFor(null)}
+            />
+          )}
 
           {ex.sets.map((s, i) => {
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
