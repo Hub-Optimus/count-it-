@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
+import Goals from './Goals'
 
-export default function Settings({ user, workouts, defaultUnit, onUnitChange }) {
+export default function Settings({ user, workouts, defaultUnit, onUnitChange, profile, onProfileChange }) {
   function exportJson() {
     const payload = {
       app: 'Count It',
@@ -32,6 +33,10 @@ export default function Settings({ user, workouts, defaultUnit, onUnitChange }) 
 
   return (
     <div>
+      <div className="card">
+        <Goals user={user} initial={profile} mode="settings" onDone={onProfileChange} />
+      </div>
+
       <div className="card">
         <label className="label">Default unit for new sets</label>
         <div className="chip-row">

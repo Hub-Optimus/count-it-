@@ -73,3 +73,22 @@ export async function deleteWorkout(workoutId) {
   const { error } = await supabase.from('workouts').delete().eq('id', workoutId)
   if (error) throw error
 }
+
+// ---- profiles (F1: goals) ----
+
+export async function fetchProfile(userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('goals, goal_note')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return data // null when the user has no profile row yet
+}
+
+export async function saveProfile(userId, { goals, goalNote }) {
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({ user_id: userId, goals, goal_note: goalNote || null, updated_at: new Date().toISOString() })
+  if (error) throw error
+}

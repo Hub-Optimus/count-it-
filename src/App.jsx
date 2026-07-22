@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, configured } from './lib/supabase'
-import { fetchWorkouts } from './lib/db'
+import { fetchWorkouts, fetchProfile } from './lib/db'
 import TabBar, { Tally } from './components/TabBar'
 import Auth from './components/Auth'
 import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
 import Progress from './components/Progress'
 import Settings from './components/Settings'
+import Goals from './components/Goals'
 
 const UNIT_KEY = 'countit-unit'
 
@@ -54,6 +55,7 @@ function Main({ user }) {
   const [loadError, setLoadError] = useState('')
   const [editor, setEditor] = useState(null) // null | { workout: null } | { workout }
   const [defaultUnit, setDefaultUnit] = useState(() => localStorage.getItem(UNIT_KEY) || 'kg')
+  const [profile, setProfile] = useState(undefined) // undefined = loading, null = needs onboarding
 
   const load = useCallback(async () => {
     setLoadError('')
@@ -66,6 +68,10 @@ function Main({ user }) {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    fetchProfile(user.id).then(setProfile).catch(() => setProfile(null))
+  }, [user.id])
 
   const exerciseNames = useMemo(() => {
     if (!workouts) return []
@@ -81,6 +87,18 @@ function Main({ user }) {
   function changeUnit(u) {
     setDefaultUnit(u)
     localStorage.setItem(UNIT_KEY, u)
+  }
+
+  if (profile === undefined) {
+    return (
+      <div className="splash">
+        <Tally size={52} />
+      </div>
+    )
+  }
+
+  if (profile === null) {
+    return <Goals user={user} initial={null} mode="onboard" onDone={setProfile} />
   }
 
   if (editor) {
@@ -127,6 +145,8 @@ function Main({ user }) {
           workouts={workouts ?? []}
           defaultUnit={defaultUnit}
           onUnitChange={changeUnit}
+          profile={profile}
+          onProfileChange={setProfile}
         />
       )}
 
