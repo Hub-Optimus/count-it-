@@ -121,7 +121,7 @@ function Main({ user }) {
 
   return (
     <div className="app-shell">
-      <TabBar tab={tab} onChange={setTab} user={user} />
+      <TabBar tab={tab} onChange={setTab} user={user} sessionCount={workouts?.length} />
       <div className="app">
       <header className="app-header">
         <span className="brand">

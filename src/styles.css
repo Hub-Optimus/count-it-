@@ -132,6 +132,10 @@ button { cursor: pointer; }
   margin-bottom: 12px;
 }
 
+.workout-grid {
+  display: block;
+}
+
 .workout-card {
   width: 100%;
   display: grid;
@@ -752,4 +756,25 @@ a { color: var(--yellow); }
   }
 
   .tab.on { background: var(--bg-deep); }
+
+  .workout-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+  }
+
+  .workout-grid .workout-card {
+    margin-bottom: 0;
+  }
+
+  .side-panel .session-row {
+    padding: 7px 2px;
+  }
+
+  .tabbar-count {
+    font-size: 12px;
+    color: var(--ink-dim);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
 }

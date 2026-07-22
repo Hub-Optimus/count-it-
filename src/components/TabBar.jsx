@@ -39,7 +39,7 @@ const icons = {
   ),
 }
 
-export default function TabBar({ tab, onChange, user }) {
+export default function TabBar({ tab, onChange, user, sessionCount }) {
   const tabs = [
     { id: 'log', label: 'Workouts' },
     { id: 'progress', label: 'Progress' },
@@ -59,6 +59,9 @@ export default function TabBar({ tab, onChange, user }) {
       ))}
       {user && (
         <div className="tabbar-foot">
+          {typeof sessionCount === 'number' && (
+            <div className="tabbar-count">{sessionCount} session{sessionCount === 1 ? '' : 's'} logged</div>
+          )}
           <span className="tabbar-email">{user.email}</span>
         </div>
       )}

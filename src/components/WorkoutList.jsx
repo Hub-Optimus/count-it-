@@ -24,7 +24,7 @@ export default function WorkoutList({ workouts, onOpen }) {
   }
 
   return (
-    <div>
+    <div className="workout-grid">
       {workouts.map((w) => {
         const d = new Date(w.date + 'T00:00:00')
         const setCount = w.exercises.reduce((n, ex) => n + ex.sets.length, 0)
