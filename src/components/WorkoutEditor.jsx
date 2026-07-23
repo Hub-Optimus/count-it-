@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout } from '../lib/db'
 import { todayISO } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
-import { imageFor } from '../lib/exerciseLibrary'
+import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
+import { PICTOGRAMS } from '../lib/pictograms'
 
 const FEELS = [
   { value: 'easy', cls: 'f-easy' },
@@ -231,11 +232,16 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
       <hr className="hr" />
 
-      {exercises.map((ex, exIdx) => (
+      {exercises.map((ex, exIdx) => {
+        const ExPic = PICTOGRAMS[pictogramFor(ex.name)]
+        const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
+        return (
         <div className="exercise-block" key={ex.k}>
           <div className="exercise-head">
-            {imageFor(ex.name) && (
-              <img className="exercise-thumb" src={imageFor(ex.name)} alt="" width="40" height="40" />
+            {ExPic && (
+              <span className="exercise-thumb" style={{ background: exColor + '26' }}>
+                <ExPic width="30" height="30" />
+              </span>
             )}
             <input
               className="input"
@@ -334,7 +340,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
           <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
         </div>
-      ))}
+        )
+      })}
 
       <button className="btn btn-block" onClick={addExercise}>+ Exercise</button>
 
