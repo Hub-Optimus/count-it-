@@ -151,6 +151,18 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     )
   }
 
+  // Accept a suggested-from-history set exactly as shown, no retyping needed
+  function confirmSet(exK, setK) {
+    touch()
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.k === exK
+          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, touched: true } : s)) }
+          : ex
+      )
+    )
+  }
+
   function addSet(exK) {
     touch()
     setExercises((list) =>
@@ -359,7 +371,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   </div>
                 )}
                 {!s.touched && s.weight !== '' && (
-                  <div className="set-compare set-compare-suggested">Suggested from last time — tap to confirm</div>
+                  <button className="set-compare set-compare-suggested" onClick={() => confirmSet(ex.k, s.k)}>
+                    Suggested from last time — tap ✓ to confirm as-is
+                  </button>
                 )}
                 <div className={`set-row ${!s.touched && s.weight !== '' ? 'set-row-suggested' : ''}`}>
                   <span className="set-index">{i + 1}</span>
