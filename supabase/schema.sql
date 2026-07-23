@@ -57,3 +57,21 @@ create policy "own exercises" on public.exercises
 
 create policy "own sets" on public.sets
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Body weight log (repeatable) + height on the profile - see body-metrics.sql
+-- for the migration; included here too so a fresh install has everything.
+create table if not exists public.body_metrics (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  date date not null,
+  weight numeric,
+  weight_unit text check (weight_unit in ('kg', 'lbs')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists body_metrics_user_date_idx on public.body_metrics (user_id, date desc);
+
+alter table public.body_metrics enable row level security;
+
+create policy "own body metrics" on public.body_metrics
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

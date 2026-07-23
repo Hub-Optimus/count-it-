@@ -399,6 +399,69 @@ input[type='date'].input { color-scheme: dark; }
 
 .exercise-head .input { font-weight: 700; }
 
+.last-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.target-chip {
+  flex: none;
+  border: 1px solid var(--line);
+  background: var(--bg-deep);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 28px;
+}
+
+.target-chip-empty {
+  color: var(--ink-faint);
+  border-style: dashed;
+  background: transparent;
+}
+
+.set-compare {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 2px 0 4px 26px;
+}
+
+.set-compare-progressing { color: var(--green); }
+.set-compare-target-hit { color: var(--yellow); }
+.set-compare-building { color: var(--blue); }
+.set-compare-regressed,
+.set-compare-below-last { color: var(--red); }
+.set-compare-holding { color: var(--ink-faint); }
+
+.set-compare-suggested {
+  display: block;
+  width: 100%;
+  text-align: left;
+  color: var(--ink-faint);
+  font-style: italic;
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: 30px;
+  cursor: pointer;
+}
+
+.set-compare-suggested:active { color: var(--ink); }
+
+.set-row-suggested .input {
+  color: var(--ink-faint);
+  border-style: dashed;
+  background: transparent;
+}
+
 .set-row {
   display: grid;
   grid-template-columns: 20px 1fr 52px 14px 72px 56px 30px;
@@ -639,6 +702,25 @@ input[type='date'].input { color-scheme: dark; }
   letter-spacing: 0.8px;
   margin-top: 4px;
 }
+
+.trend-arrow {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-up { color: var(--green); }
+.trend-down { color: var(--red); }
+
+.goal-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.goal-status.goal-on { color: var(--green); }
+.goal-status.goal-off { color: var(--yellow); }
 
 .chart-wrap {
   background: var(--card);
