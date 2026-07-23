@@ -124,3 +124,22 @@ export async function deleteBodyMetric(id) {
   const { error } = await supabase.from('body_metrics').delete().eq('id', id)
   if (error) throw error
 }
+
+// ---- per-exercise rep targets (progressive overload) ----
+
+export async function fetchExerciseTargets(userId) {
+  const { data, error } = await supabase
+    .from('exercise_targets')
+    .select('exercise_name, target_reps')
+  if (error) throw error
+  const map = {}
+  for (const row of data ?? []) map[row.exercise_name.toLowerCase()] = row.target_reps
+  return map
+}
+
+export async function saveExerciseTarget(userId, exerciseName, targetReps) {
+  const { error } = await supabase
+    .from('exercise_targets')
+    .upsert({ user_id: userId, exercise_name: exerciseName, target_reps: targetReps, updated_at: new Date().toISOString() })
+  if (error) throw error
+}

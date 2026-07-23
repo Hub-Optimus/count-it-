@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { insertFullWorkout, updateFullWorkout, deleteWorkout } from '../lib/db'
+import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget } from '../lib/db'
 import { todayISO } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
+import { lastSessionFor, compareSet } from '../lib/setComparison'
 
 const FEELS = [
   { value: 'easy', cls: 'f-easy' },
@@ -56,6 +57,18 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
+  const [targets, setTargets] = useState({}) // { 'exercise name lowercase': targetReps }
+
+  useEffect(() => {
+    fetchExerciseTargets(user.id).then(setTargets).catch(() => {})
+  }, [user.id])
+
+  async function setTargetFor(exerciseName, reps) {
+    setTargets((t) => ({ ...t, [exerciseName.trim().toLowerCase()]: reps }))
+    try {
+      await saveExerciseTarget(user.id, exerciseName.trim(), reps)
+    } catch { /* best effort - local state already updated */ }
+  }
   const dirtyRef = useRef(false)
   const touch = () => { dirtyRef.current = true }
 
@@ -236,6 +249,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       {exercises.map((ex, exIdx) => {
         const ExPic = PICTOGRAMS[pictogramFor(ex.name)]
         const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
+        const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
+        const targetReps = targets[ex.name.trim().toLowerCase()] || null
         return (
         <div className="exercise-block" key={ex.k}>
           <div className="exercise-head">
@@ -266,10 +281,43 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             />
           )}
 
+          {(lastSession || ex.name.trim()) && (
+            <div className="last-time-row">
+              {lastSession ? (
+                <span className="small">
+                  Last time: {lastSession.sets.map((s, idx) => (
+                    <span key={idx}>{idx > 0 ? ', ' : ''}{s.weight ?? '–'}{s.unit === 'lbs' ? 'lb' : 'kg'}×{s.reps ?? '–'}</span>
+                  ))}
+                </span>
+              ) : <span className="small">No history for this exercise yet</span>}
+              {targetReps ? (
+                <button className="target-chip" onClick={() => { const v = window.prompt('Target reps for this exercise', String(targetReps)); const n = parseInt(v, 10); if (Number.isFinite(n) && n > 0) setTargetFor(ex.name, n) }}>
+                  🎯 {targetReps} rep target
+                </button>
+              ) : (
+                <button className="target-chip target-chip-empty" onClick={() => { const v = window.prompt(`Set a rep target for ${ex.name.trim()}? (e.g. 15)`); const n = parseInt(v, 10); if (Number.isFinite(n) && n > 0) setTargetFor(ex.name, n) }}>
+                  + Set target
+                </button>
+              )}
+            </div>
+          )}
+
           {ex.sets.map((s, i) => {
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
+            const lastSet = lastSession?.sets?.[i]
+            const cmp = compareSet(s, lastSet, targetReps)
             return (
               <div key={s.k}>
+                {cmp && (
+                  <div className={`set-compare set-compare-${cmp.status}`}>
+                    {cmp.status === 'progressing' && `↑ Up from last time (was ${cmp.lastKg}kg)`}
+                    {cmp.status === 'regressed' && `↓ Down from last time (was ${cmp.lastKg}kg)`}
+                    {cmp.status === 'target-hit' && `🎯 Target hit — try more weight next time`}
+                    {cmp.status === 'building' && `Building — ${cmp.targetReps - s.reps} more reps to target`}
+                    {cmp.status === 'below-last' && `↓ Fewer reps than last time (was ${cmp.lastReps})`}
+                    {cmp.status === 'holding' && `Same as last time`}
+                  </div>
+                )}
                 <div className="set-row">
                   <span className="set-index">{i + 1}</span>
                   <input
