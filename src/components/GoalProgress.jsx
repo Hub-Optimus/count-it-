@@ -1,14 +1,19 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { currentStreakWeeks, recentPRs, goalStatus } from '../lib/goalAnalytics'
+import { fetchBodyMetrics } from '../lib/db'
 import { fmtWeight, fmtVolume, fmtDate } from '../lib/format'
 import { Tally } from './TabBar'
 
-function TrendArrow({ change }) {
+// Arrow glyph shows the factual direction of change; color reflects
+// whether that direction is good news for THIS goal (onTrack), since
+// weight going down is good for "Lose weight" but bad for "Gain weight".
+function TrendArrow({ change, good }) {
   if (change == null) return <span className="small">new</span>
   const up = change >= 0
   const rounded = Math.abs(change) < 0.5 ? 0 : Math.round(Math.abs(change))
+  const colorClass = good == null ? (up ? 'trend-up' : 'trend-down') : (good ? 'trend-up' : 'trend-down')
   return (
-    <span className={`trend-arrow ${up ? 'trend-up' : 'trend-down'}`}>
+    <span className={`trend-arrow ${colorClass}`}>
       {up ? '↑' : '↓'} {rounded}%
     </span>
   )
@@ -18,14 +23,21 @@ function metricValue(g) {
   if (g.metric === 'Estimated 1RM') return `${fmtWeight(g.current)} kg`
   if (g.metric === 'Training volume') return fmtVolume(g.current)
   if (g.metric === 'Workouts logged') return String(g.current)
+  if (g.metric === 'Body weight') return `${fmtWeight(g.current)} kg`
   return '—'
 }
 
-export default function GoalProgress({ workouts, profile }) {
+export default function GoalProgress({ user, workouts, profile }) {
+  const [bodyMetrics, setBodyMetrics] = useState([])
+
+  useEffect(() => {
+    fetchBodyMetrics(user.id).then(setBodyMetrics).catch(() => setBodyMetrics([]))
+  }, [user.id])
+
   const streak = useMemo(() => currentStreakWeeks(workouts), [workouts])
   const prs = useMemo(() => recentPRs(workouts, 14), [workouts])
   const goals = profile?.goals || []
-  const status = useMemo(() => goalStatus(workouts, goals, 28), [workouts, goals])
+  const status = useMemo(() => goalStatus(workouts, goals, 28, new Date(), bodyMetrics), [workouts, goals, bodyMetrics])
 
   if (!workouts.length) {
     return (
@@ -62,7 +74,7 @@ export default function GoalProgress({ workouts, profile }) {
         <div className="card goal-card" key={g.goal}>
           <div className="goal-card-head">
             <span className="wc-split">{g.goal}</span>
-            {!g.needsWeightLog && !g.unsupported && <TrendArrow change={g.change} />}
+            {!g.needsWeightLog && !g.unsupported && <TrendArrow change={g.change} good={g.onTrack} />}
           </div>
           {g.needsWeightLog ? (
             <p className="small" style={{ margin: '6px 0 0' }}>
@@ -76,7 +88,7 @@ export default function GoalProgress({ workouts, profile }) {
               {g.note && <p className="small" style={{ margin: '4px 0 0' }}>{g.note}</p>}
               {g.change != null && (
                 <p className={`small goal-status ${g.onTrack ? 'goal-on' : 'goal-off'}`} style={{ margin: '6px 0 0' }}>
-                  {g.onTrack ? 'On track — trending up' : 'Trending down vs the last 4 weeks'}
+                  {g.onTrack ? `On track — ${g.change >= 0 ? 'trending up' : 'trending down'}` : `Needs attention — ${g.change >= 0 ? 'trending up' : 'trending down'} vs the last 4 weeks`}
                 </p>
               )}
             </>

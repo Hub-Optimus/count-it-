@@ -114,11 +114,19 @@ export function pctChange(curr, prev) {
   return ((curr - prev) / prev) * 100
 }
 
+// Average logged body weight (kg) within [start, end), or null if no entries.
+function avgWeightInRange(bodyMetrics, start, end) {
+  const vals = bodyMetrics
+    .filter((m) => { const d = parseISO(m.date); return d >= start && d < end && m.weight != null })
+    .map((m) => toKg(Number(m.weight), m.weight_unit))
+  if (!vals.length) return null
+  return vals.reduce((a, b) => a + b, 0) / vals.length
+}
+
 // Per-goal status over the trailing `days` window vs the window before it.
-// Only covers goals genuinely measurable from workout logs. Lose/Gain
-// weight are intentionally excluded - body weight isn't tracked anywhere
-// in the app, so any signal here would be fabricated.
-export function goalStatus(workouts, goals, days = 28, today = new Date()) {
+// bodyMetrics (optional) enables real Lose/Gain weight tracking; without
+// it those goals fall back to an honest "can't track" result.
+export function goalStatus(workouts, goals, days = 28, today = new Date(), bodyMetrics = []) {
   const windowEnd = new Date(today.getTime() + DAY) // inclusive of today
   const windowStart = new Date(windowEnd.getTime() - days * DAY)
   const prevStart = new Date(windowStart.getTime() - days * DAY)
@@ -130,6 +138,12 @@ export function goalStatus(workouts, goals, days = 28, today = new Date()) {
   const currBestE1rm = Math.max(0, ...perWorkout.filter((w) => parseISO(w.date) >= windowStart && parseISO(w.date) < windowEnd).map((w) => w.bestE1rm))
   const prevBestE1rm = Math.max(0, ...perWorkout.filter((w) => parseISO(w.date) >= prevStart && parseISO(w.date) < windowStart).map((w) => w.bestE1rm))
 
+  const currWeight = avgWeightInRange(bodyMetrics, windowStart, windowEnd)
+  const prevWeight = avgWeightInRange(bodyMetrics, prevStart, windowStart)
+  const weightChange = (currWeight != null && prevWeight != null && prevWeight > 0)
+    ? ((currWeight - prevWeight) / prevWeight) * 100
+    : null
+
   const results = []
   for (const goal of goals) {
     if (goal === 'Build strength') {
@@ -138,12 +152,11 @@ export function goalStatus(workouts, goals, days = 28, today = new Date()) {
         goal, metric: 'Estimated 1RM', current: currBestE1rm, change,
         onTrack: change == null ? null : change >= 0,
       })
-    } else if (goal === 'Build muscle' || goal === 'Gain weight') {
+    } else if (goal === 'Build muscle') {
       const change = pctChange(curr.total, prev.total)
       results.push({
         goal, metric: 'Training volume', current: curr.total, change,
         onTrack: change == null ? null : change >= 0,
-        note: goal === 'Gain weight' ? 'Based on training volume — log body weight for a direct measure.' : null,
       })
     } else if (goal === 'Improve stamina' || goal === 'General fitness') {
       const change = pctChange(curr.count, prev.count)
@@ -151,8 +164,19 @@ export function goalStatus(workouts, goals, days = 28, today = new Date()) {
         goal, metric: 'Workouts logged', current: curr.count, change,
         onTrack: change == null ? null : change >= 0,
       })
-    } else if (goal === 'Lose weight') {
-      results.push({ goal, metric: null, current: null, change: null, onTrack: null, needsWeightLog: true })
+    } else if (goal === 'Lose weight' || goal === 'Gain weight') {
+      if (weightChange == null) {
+        results.push({ goal, metric: null, current: null, change: null, onTrack: null, needsWeightLog: true })
+      } else {
+        // direction of "good" flips between these two goals - losing
+        // weight going DOWN is on-track for "Lose weight" but OFF track
+        // for "Gain weight", and vice versa
+        const wantsDown = goal === 'Lose weight'
+        results.push({
+          goal, metric: 'Body weight', current: currWeight, change: weightChange,
+          onTrack: wantsDown ? weightChange <= 0 : weightChange >= 0,
+        })
+      }
     } else {
       results.push({ goal, metric: null, current: null, change: null, onTrack: null, unsupported: true })
     }

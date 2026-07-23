@@ -79,7 +79,7 @@ export async function deleteWorkout(workoutId) {
 export async function fetchProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('goals, goal_note')
+    .select('goals, goal_note, height_cm')
     .eq('user_id', userId)
     .maybeSingle()
   if (error) throw error
@@ -90,5 +90,37 @@ export async function saveProfile(userId, { goals, goalNote }) {
   const { error } = await supabase
     .from('profiles')
     .upsert({ user_id: userId, goals, goal_note: goalNote || null, updated_at: new Date().toISOString() })
+  if (error) throw error
+}
+
+// Partial upsert - only touches height_cm, leaves goals/goal_note untouched
+// (Postgres upsert only SETs columns present in the payload).
+export async function saveHeight(userId, heightCm) {
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({ user_id: userId, height_cm: heightCm, updated_at: new Date().toISOString() })
+  if (error) throw error
+}
+
+// ---- body weight log ----
+
+export async function fetchBodyMetrics(userId) {
+  const { data, error } = await supabase
+    .from('body_metrics')
+    .select('id, date, weight, weight_unit')
+    .order('date', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function insertBodyMetric(userId, { date, weight, weightUnit }) {
+  const { error } = await supabase
+    .from('body_metrics')
+    .insert({ user_id: userId, date, weight, weight_unit: weightUnit })
+  if (error) throw error
+}
+
+export async function deleteBodyMetric(id) {
+  const { error } = await supabase.from('body_metrics').delete().eq('id', id)
   if (error) throw error
 }

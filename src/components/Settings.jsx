@@ -1,7 +1,15 @@
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchBodyMetrics } from '../lib/db'
 import Goals from './Goals'
+import BodyMetrics from './BodyMetrics'
 
 export default function Settings({ user, workouts, defaultUnit, onUnitChange, profile, onProfileChange }) {
+  const [bodyMetrics, setBodyMetrics] = useState([])
+
+  const loadMetrics = () => fetchBodyMetrics(user.id).then(setBodyMetrics).catch(() => {})
+  useEffect(() => { loadMetrics() }, [user.id])
+
   function exportJson() {
     const payload = {
       app: 'Count It',
@@ -35,6 +43,16 @@ export default function Settings({ user, workouts, defaultUnit, onUnitChange, pr
     <div>
       <div className="card">
         <Goals user={user} initial={profile} mode="settings" onDone={onProfileChange} />
+      </div>
+
+      <div className="card">
+        <BodyMetrics
+          user={user}
+          height={profile?.height_cm}
+          bodyMetrics={bodyMetrics}
+          onHeightChange={(h) => onProfileChange({ ...profile, height_cm: h })}
+          onMetricsChange={loadMetrics}
+        />
       </div>
 
       <div className="card">

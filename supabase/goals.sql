@@ -5,6 +5,7 @@ create table if not exists public.profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   goals text[] not null default '{}',
   goal_note text,
+  height_cm numeric,
   updated_at timestamptz not null default now()
 );
 

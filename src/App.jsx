@@ -168,7 +168,7 @@ function Main({ user }) {
       )}
 
       {tab === 'progress' && (
-        <ProgressTab workouts={workouts ?? []} profile={profile} />
+        <ProgressTab user={user} workouts={workouts ?? []} profile={profile} />
       )}
 
       {tab === 'settings' && (
@@ -187,7 +187,7 @@ function Main({ user }) {
   )
 }
 
-function ProgressTab({ workouts, profile }) {
+function ProgressTab({ user, workouts, profile }) {
   const [view, setView] = useState('goals')
   return (
     <div>
@@ -196,7 +196,7 @@ function ProgressTab({ workouts, profile }) {
         <button className={`chip ${view === 'trends' ? 'on' : ''}`} onClick={() => setView('trends')}>Trends</button>
         <button className={`chip ${view === 'exercise' ? 'on' : ''}`} onClick={() => setView('exercise')}>Per exercise</button>
       </div>
-      {view === 'goals' && <GoalProgress workouts={workouts} profile={profile} />}
+      {view === 'goals' && <GoalProgress user={user} workouts={workouts} profile={profile} />}
       {view === 'trends' && <Trends workouts={workouts} profile={profile} />}
       {view === 'exercise' && <Progress workouts={workouts} />}
     </div>
