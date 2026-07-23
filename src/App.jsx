@@ -7,6 +7,7 @@ import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
 import Progress from './components/Progress'
 import Trends from './components/Trends'
+import GoalProgress from './components/GoalProgress'
 import Settings from './components/Settings'
 import Goals from './components/Goals'
 import SidePanel from './components/SidePanel'
@@ -59,10 +60,27 @@ function Main({ user }) {
   const [defaultUnit, setDefaultUnit] = useState(() => localStorage.getItem(UNIT_KEY) || 'kg')
   const [profile, setProfile] = useState(undefined) // undefined = loading, null = needs onboarding
 
+  // Right after a fresh sign-in, the very first request can occasionally
+  // race a brand-new token before Supabase's clock-skew correction has
+  // settled ("jwt issued in the future") - self-heals on reload, so retry
+  // once automatically instead of showing an error the user has to act on.
+  async function withJwtRetry(fn) {
+    try {
+      return await fn()
+    } catch (e) {
+      const msg = (e.message || '').toLowerCase()
+      if (msg.includes('jwt') || msg.includes('issued')) {
+        await new Promise((r) => setTimeout(r, 900))
+        return await fn()
+      }
+      throw e
+    }
+  }
+
   const load = useCallback(async () => {
     setLoadError('')
     try {
-      setWorkouts(await fetchWorkouts())
+      setWorkouts(await withJwtRetry(fetchWorkouts))
     } catch (e) {
       setLoadError(e.message || 'Could not load your workouts.')
       setWorkouts([])
@@ -72,7 +90,7 @@ function Main({ user }) {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    fetchProfile(user.id).then(setProfile).catch(() => setProfile(null))
+    withJwtRetry(() => fetchProfile(user.id)).then(setProfile).catch(() => setProfile(null))
   }, [user.id])
 
   const exerciseNames = useMemo(() => {
@@ -170,14 +188,17 @@ function Main({ user }) {
 }
 
 function ProgressTab({ workouts, profile }) {
-  const [view, setView] = useState('trends')
+  const [view, setView] = useState('goals')
   return (
     <div>
       <div className="chip-row">
+        <button className={`chip ${view === 'goals' ? 'on' : ''}`} onClick={() => setView('goals')}>Goals</button>
         <button className={`chip ${view === 'trends' ? 'on' : ''}`} onClick={() => setView('trends')}>Trends</button>
         <button className={`chip ${view === 'exercise' ? 'on' : ''}`} onClick={() => setView('exercise')}>Per exercise</button>
       </div>
-      {view === 'trends' ? <Trends workouts={workouts} profile={profile} /> : <Progress workouts={workouts} />}
+      {view === 'goals' && <GoalProgress workouts={workouts} profile={profile} />}
+      {view === 'trends' && <Trends workouts={workouts} profile={profile} />}
+      {view === 'exercise' && <Progress workouts={workouts} />}
     </div>
   )
 }

@@ -640,6 +640,25 @@ input[type='date'].input { color-scheme: dark; }
   margin-top: 4px;
 }
 
+.trend-arrow {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-up { color: var(--green); }
+.trend-down { color: var(--red); }
+
+.goal-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.goal-status.goal-on { color: var(--green); }
+.goal-status.goal-off { color: var(--yellow); }
+
 .chart-wrap {
   background: var(--card);
   border: 1px solid var(--line);
