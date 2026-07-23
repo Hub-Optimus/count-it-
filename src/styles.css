@@ -486,6 +486,27 @@ input[type='date'].input { color-scheme: dark; }
   justify-content: center;
 }
 
+.done-btn {
+  flex: none;
+  width: auto;
+  padding: 0 10px;
+  color: var(--green);
+  border-color: var(--green);
+  background: transparent;
+  font-weight: 700;
+}
+
+.exercise-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 4px 0 2px;
+  min-height: 36px;
+}
+
 /* ---------- exercise picker overlay ---------- */
 
 .picker-overlay {

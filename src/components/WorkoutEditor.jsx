@@ -22,7 +22,7 @@ const nextKey = () => `k${++seq}`
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
 const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '' })
-const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)] })
+const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false })
 
 function historySet(histSet) {
   return {
@@ -40,6 +40,7 @@ function toModel(workout) {
   return workout.exercises.map((ex) => ({
     k: nextKey(),
     name: ex.name,
+    collapsed: false,
     sets: ex.sets.map((s) => ({
       k: nextKey(),
       weight: s.weight ?? '',
@@ -183,6 +184,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setExercises((list) => list.filter((e) => e.k !== exK))
   }
 
+  function toggleCollapsed(exK) {
+    setExercises((list) => list.map((ex) => (ex.k === exK ? { ...ex, collapsed: !ex.collapsed } : ex)))
+  }
+
   function copyPreviousSession() {
     const src = workouts.find((w) => w.id !== workout?.id)
     if (!src) return
@@ -254,7 +259,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         <button className="btn btn-ghost" onClick={cancel}>Cancel</button>
         <div className="screen-title">{workout ? 'Edit session' : 'New session'}</div>
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Finishing…' : 'Finish'}
         </button>
       </div>
 
@@ -288,6 +293,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
         const targetReps = targets[ex.name.trim().toLowerCase()] || null
+        const validSets = ex.sets.filter((st) => st.weight !== '' && st.reps !== '')
+        const summaryBest = validSets.length
+          ? validSets.reduce((best, st) => (Number(st.weight) > Number(best.weight) ? st : best), validSets[0])
+          : null
         return (
         <div className="exercise-block" key={ex.k}>
           <div className="exercise-head">
@@ -307,9 +316,24 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
               </svg>
             </button>
+            {!ex.collapsed && ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
+              <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
+                ✓ Done
+              </button>
+            )}
             <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
           </div>
 
+          {ex.collapsed ? (
+            <button className="exercise-summary" onClick={() => toggleCollapsed(ex.k)}>
+              <span className="small">
+                {validSets.length} set{validSets.length === 1 ? '' : 's'}
+                {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
+              </span>
+              <span className="small" style={{ color: 'var(--yellow)' }}>Edit</span>
+            </button>
+          ) : (
+          <>
           {pickerFor === ex.k && (
             <ExercisePicker
               recentNames={exerciseNames}
@@ -423,6 +447,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           })}
 
           <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
+          </>
+          )}
         </div>
         )
       })}
@@ -450,7 +476,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           </button>
         )}
         <button className="btn btn-primary btn-block" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save session'}
+          {saving ? 'Finishing…' : 'Finish workout'}
         </button>
       </div>
     </div>
