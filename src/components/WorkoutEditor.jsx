@@ -163,6 +163,18 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     )
   }
 
+  // Accept every suggested set in this exercise at once, exactly as shown
+  function confirmAllSets(exK) {
+    touch()
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.k === exK
+          ? { ...ex, sets: ex.sets.map((s) => ({ ...s, touched: true })) }
+          : ex
+      )
+    )
+  }
+
   function addSet(exK) {
     touch()
     setExercises((list) =>
@@ -371,9 +383,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   </div>
                 )}
                 {!s.touched && s.weight !== '' && (
-                  <button className="set-compare set-compare-suggested" onClick={() => confirmSet(ex.k, s.k)}>
-                    Suggested from last time — tap ✓ to confirm as-is
-                  </button>
+                  <div className="set-compare set-compare-suggested">
+                    Suggested from last time — confirm with ✓ or edit to change
+                  </div>
                 )}
                 <div className={`set-row ${!s.touched && s.weight !== '' ? 'set-row-suggested' : ''}`}>
                   <span className="set-index">{i + 1}</span>
@@ -420,6 +432,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   >
                     /side
                   </button>
+                  {!s.touched ? (
+                    <button className="confirm-tick" onClick={() => confirmSet(ex.k, s.k)} aria-label={`Confirm set ${i + 1} as shown`} title="Confirm as-is">✓</button>
+                  ) : <span />}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>–</button>
                 </div>
                 <div className="set-feel">
@@ -444,6 +459,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             )
           })}
 
+          {ex.sets.some((s) => !s.touched) && (
+            <button className="btn btn-block confirm-all-btn" onClick={() => confirmAllSets(ex.k)}>
+              ✓ Confirm all sets as shown
+            </button>
+          )}
           <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
         </div>
         )
