@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { toKg, KG_PER_LB, fmtWeight, fmtVolume, fmtDate } from '../lib/format'
-import { imageFor } from '../lib/exerciseLibrary'
+import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
+import { PICTOGRAMS } from '../lib/pictograms'
 import { Tally } from './TabBar'
 
 // Build: exercise name -> { sessions: [{date, bestKg, bestSet, volKg}], allLbs }
@@ -106,12 +107,19 @@ export default function Progress({ workouts }) {
     return `${fmtWeight(bs.weight)} ${bs.unit === 'lbs' ? 'lb' : 'kg'} × ${bs.reps ?? '–'}${bs.per_side ? ' /side' : ''}`
   }
 
+  const NamePic = PICTOGRAMS[pictogramFor(name)]
+  const nameColor = GROUP_COLOR[groupFor(name)] || GROUP_COLOR.Other
+
   return (
     <div>
       <div className="ex-picker">
         <label className="label" htmlFor="ex-select">Exercise</label>
         <div className="ex-picker-row">
-          {imageFor(name) && <img className="exercise-thumb" src={imageFor(name)} alt="" width="40" height="40" />}
+          {NamePic && (
+            <span className="exercise-thumb" style={{ background: nameColor + '26' }}>
+              <NamePic width="30" height="30" />
+            </span>
+          )}
           <select id="ex-select" value={name} onChange={(e) => setPicked(e.target.value)}>
             {names.map((n) => (
               <option key={n} value={n}>{n} ({stats.get(n).sessions.length})</option>

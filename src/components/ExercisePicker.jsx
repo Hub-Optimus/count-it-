@@ -1,34 +1,44 @@
 import { useMemo, useState } from 'react'
-import { GROUPS, EXERCISES, groupFor, imageFor } from '../lib/exerciseLibrary'
+import Fuse from 'fuse.js'
+import { GROUPS, EXERCISES, groupFor, pictogramFor, GROUP_COLOR } from '../lib/exerciseLibrary'
+import { PICTOGRAMS } from '../lib/pictograms'
 
-// Small icons didn't read clearly at this size (confirmed: several were
-// mistaken for unrelated symbols). Colored letter badges are unambiguous
-// at any size and match how Strong/Hevy tag exercise categories.
-const GROUP_BADGE = {
-  Chest: { abbr: 'CH', color: '#e5484d' },
-  Back: { abbr: 'BK', color: '#4e86f7' },
-  Shoulders: { abbr: 'SH', color: '#f5b93b' },
-  Legs: { abbr: 'LG', color: '#57a35f' },
-  Biceps: { abbr: 'BI', color: '#c77dff' },
-  Triceps: { abbr: 'TR', color: '#4dd0c8' },
-  Core: { abbr: 'CO', color: '#ff9f5b' },
-  Cardio: { abbr: 'CD', color: '#f06fa8' },
-  Other: { abbr: '?', color: '#767b84' },
+// Built once, reused across every picker open — 873 items, cheap to keep in memory.
+// Tuned for typos and word-order (e.g. "dumble press" finds "Dumbbell Bench Press"):
+// tokenize matches per-word regardless of order, threshold allows small typos.
+const fuse = new Fuse(EXERCISES, {
+  keys: ['name'],
+  threshold: 0.32,
+  ignoreLocation: true,
+  useTokenSearch: true,
+  tokenMatch: 'all',
+})
+
+const GROUP_ABBR = {
+  Chest: 'CH', Back: 'BK', Shoulders: 'SH', Legs: 'LG',
+  Biceps: 'BI', Triceps: 'TR', Core: 'CO', Cardio: 'CD', Other: '?',
 }
 
 function GroupBadge({ group }) {
-  const b = GROUP_BADGE[group] || GROUP_BADGE.Other
+  const color = GROUP_COLOR[group] || GROUP_COLOR.Other
+  const abbr = GROUP_ABBR[group] || GROUP_ABBR.Other
   return (
-    <span className="group-badge" style={{ background: b.color }} aria-hidden="true">
-      {b.abbr}
+    <span className="group-badge" style={{ background: color }} aria-hidden="true">
+      {abbr}
     </span>
   )
 }
 
 function RowIcon({ name, group }) {
-  const src = imageFor(name)
-  if (src) {
-    return <img className="picker-row-thumb" src={src} alt="" width="32" height="32" loading="lazy" />
+  const cat = pictogramFor(name)
+  const Pic = cat && PICTOGRAMS[cat]
+  if (Pic) {
+    const color = GROUP_COLOR[group] || GROUP_COLOR.Other
+    return (
+      <span className="picker-row-picto" style={{ background: color + '26' }}>
+        <Pic width="26" height="26" />
+      </span>
+    )
   }
   return <GroupBadge group={group} />
 }
@@ -46,12 +56,12 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
 
   const filtered = useMemo(() => {
     if (!q) return null // browsing mode, not searching
-    const inLib = EXERCISES.filter((e) => e.name.toLowerCase().includes(q))
+    const inLib = fuse.search(query.trim()).map((r) => r.item)
     const inRecent = recentNames
       .filter((n) => n.toLowerCase().includes(q) && !inLib.some((e) => e.name === n))
       .map((name) => ({ name, group: groupFor(name) || 'Other' }))
     return [...inRecent, ...inLib]
-  }, [q, recentNames])
+  }, [q, query, recentNames])
 
   const grouped = useMemo(() => {
     const list = group === 'All' ? EXERCISES : EXERCISES.filter((e) => e.group === group)
@@ -98,18 +108,25 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
         <div className="picker-list">
           {q ? (
             filtered.length > 0 ? (
-              filtered.map((e) => (
-                <button key={e.name} className="picker-row" onClick={() => pick(e.name)}>
-                  <RowIcon name={e.name} group={e.group} />
-                  {e.name}
-                </button>
-              ))
+              <>
+                {filtered.slice(0, 40).map((e) => (
+                  <button key={e.name} className="picker-row" onClick={() => pick(e.name)}>
+                    <RowIcon name={e.name} group={e.group} />
+                    {e.name}
+                  </button>
+                ))}
+                {filtered.length > 40 && (
+                  <p className="small" style={{ padding: '10px 4px' }}>
+                    {filtered.length - 40} more match — keep typing to narrow it down.
+                  </p>
+                )}
+              </>
             ) : (
               <p className="small" style={{ padding: '12px 4px' }}>No matches in the library.</p>
             )
           ) : (
             <>
-              {group === 'All' && recent.length > 0 && (
+              {recent.length > 0 && (
                 <div className="picker-section">
                   <div className="picker-section-title">Recently used</div>
                   {recent.map((e) => (
@@ -120,17 +137,23 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
                   ))}
                 </div>
               )}
-              {[...grouped.entries()].map(([g, list]) => (
-                <div className="picker-section" key={g}>
-                  <div className="picker-section-title">{g}</div>
-                  {list.map((e) => (
-                    <button key={e.name} className="picker-row" onClick={() => pick(e.name)}>
-                      <RowIcon name={e.name} group={g} />
-                      {e.name}
-                    </button>
-                  ))}
-                </div>
-              ))}
+              {group === 'All' ? (
+                <p className="small" style={{ padding: '14px 4px' }}>
+                  873 exercises available — search above, or pick a muscle group to browse.
+                </p>
+              ) : (
+                [...grouped.entries()].map(([g, list]) => (
+                  <div className="picker-section" key={g}>
+                    <div className="picker-section-title">{g} ({list.length})</div>
+                    {list.map((e) => (
+                      <button key={e.name} className="picker-row" onClick={() => pick(e.name)}>
+                        <RowIcon name={e.name} group={g} />
+                        {e.name}
+                      </button>
+                    ))}
+                  </div>
+                ))
+              )}
             </>
           )}
         </div>

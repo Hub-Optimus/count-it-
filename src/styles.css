@@ -387,8 +387,10 @@ input[type='date'].input { color-scheme: dark; }
   width: 40px;
   height: 40px;
   border-radius: 9px;
-  object-fit: cover;
-  background: var(--bg-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
 }
 
 .exercise-head .input { font-weight: 700; }
@@ -529,13 +531,15 @@ input[type='date'].input { color-scheme: dark; }
   color: #0b0c0e;
 }
 
-.picker-row-thumb {
+.picker-row-picto {
   flex: none;
   width: 32px;
   height: 32px;
-  border-radius: 7px;
-  object-fit: cover;
-  background: var(--bg-deep);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
 }
 
 .picker-custom {
