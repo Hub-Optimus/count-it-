@@ -367,6 +367,10 @@ input[type='date'].input { color-scheme: dark; }
 
 /* ---------- exercise blocks in the editor ---------- */
 
+.exercise-grid {
+  display: block;
+}
+
 .exercise-block {
   background: var(--card);
   border: 1px solid var(--line);
@@ -808,8 +812,19 @@ a { color: var(--yellow); }
   }
 
   .app:not(.app-shell .app) {
-    max-width: 640px;
+    max-width: 900px;
     padding: 0 16px 40px;
+  }
+
+  .exercise-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+
+  .exercise-grid .exercise-block {
+    margin-bottom: 0;
   }
 
   .app-header {
