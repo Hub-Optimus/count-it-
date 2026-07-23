@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, configured } from './lib/supabase'
 import { fetchWorkouts, fetchProfile } from './lib/db'
+import { todayISO } from './lib/format'
 import TabBar, { Tally } from './components/TabBar'
 import Auth from './components/Auth'
 import WorkoutList from './components/WorkoutList'
@@ -109,6 +110,22 @@ function Main({ user }) {
     localStorage.setItem(UNIT_KEY, u)
   }
 
+  function startNewWorkout() {
+    const existing = (workouts ?? []).find((w) => w.date === todayISO())
+    if (existing) {
+      const label = existing.split || 'session'
+      const continueIt = window.confirm(
+        `You already logged a ${label} today (${existing.exercises.length} exercises). ` +
+        `Press OK to add more to it, or Cancel to start a separate new session for today.`
+      )
+      if (continueIt) {
+        setEditor({ workout: existing })
+        return
+      }
+    }
+    setEditor({ workout: null })
+  }
+
   if (profile === undefined) {
     return (
       <div className="splash">
@@ -149,7 +166,7 @@ function Main({ user }) {
         <span className="brand-sub">{user.email}</span>
         <h1 className="page-title">{pageTitle}</h1>
         {tab === 'log' && (
-          <button className="btn btn-primary header-action" onClick={() => setEditor({ workout: null })}>
+          <button className="btn btn-primary header-action" onClick={startNewWorkout}>
             + New workout
           </button>
         )}
@@ -162,7 +179,7 @@ function Main({ user }) {
           <>
             {loadError && <p className="error">{loadError}</p>}
             <WorkoutList workouts={workouts} onOpen={(w) => setEditor({ workout: w })} />
-            <button className="fab" onClick={() => setEditor({ workout: null })} aria-label="New workout">+</button>
+            <button className="fab" onClick={startNewWorkout} aria-label="New workout">+</button>
           </>
         )
       )}
