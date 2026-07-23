@@ -232,6 +232,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
       <hr className="hr" />
 
+      <div className="exercise-grid">
       {exercises.map((ex, exIdx) => {
         const ExPic = PICTOGRAMS[pictogramFor(ex.name)]
         const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
@@ -342,6 +343,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         </div>
         )
       })}
+      </div>
 
       <button className="btn btn-block" onClick={addExercise}>+ Exercise</button>
 
