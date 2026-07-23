@@ -4,7 +4,7 @@ import { todayISO } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
-import { lastSessionFor, compareSet } from '../lib/setComparison'
+import { lastSessionFor, compareSet, bestSetEver } from '../lib/setComparison'
 
 const FEELS = [
   { value: 'easy', cls: 'f-easy' },
@@ -18,8 +18,25 @@ const DRAFT_KEY = 'countit-draft-v1'
 let seq = 0
 const nextKey = () => `k${++seq}`
 
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '' })
+// touched:true = this set's numbers reflect what the user actually did
+// (typed fresh, or loaded from a saved workout). touched:false = these
+// numbers are a suggestion copied from history, not yet confirmed - the
+// UI dims them and the progression comparison stays quiet until the user
+// actually edits the field.
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '', touched: true })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)] })
+
+function historySet(histSet) {
+  return {
+    k: nextKey(),
+    weight: histSet.weight ?? '',
+    unit: histSet.unit || 'kg',
+    reps: histSet.reps ?? '',
+    perSide: Boolean(histSet.per_side),
+    feel: '',
+    touched: false,
+  }
+}
 
 // db workout -> editable model
 function toModel(workout) {
@@ -33,6 +50,7 @@ function toModel(workout) {
       reps: s.reps ?? '',
       perSide: Boolean(s.per_side),
       feel: s.feel || '',
+      touched: true,
     })),
   }))
 }
@@ -103,14 +121,32 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function updateExercise(k, patch) {
     touch()
-    setExercises((list) => list.map((ex) => (ex.k === k ? { ...ex, ...patch } : ex)))
+    setExercises((list) =>
+      list.map((ex) => {
+        if (ex.k !== k) return ex
+        const next = { ...ex, ...patch }
+        // auto-fill from history when a name is picked/typed and nothing
+        // in this block has been confirmed yet - never overwrites real data
+        if (patch.name != null) {
+          const nothingEntered = ex.sets.every((s) => s.weight === '' && s.reps === '')
+          const hist = patch.name.trim() ? lastSessionFor(workouts, patch.name, workout?.id) : null
+          if (hist && nothingEntered) {
+            next.sets = [historySet(hist.sets[0])]
+          }
+        }
+        return next
+      })
+    )
   }
 
   function updateSet(exK, setK, patch) {
     touch()
+    const marksConfirmed = 'weight' in patch || 'reps' in patch
     setExercises((list) =>
       list.map((ex) =>
-        ex.k === exK ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, ...patch } : s)) } : ex
+        ex.k === exK
+          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, ...patch, touched: marksConfirmed ? true : s.touched } : s)) }
+          : ex
       )
     )
   }
@@ -120,9 +156,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setExercises((list) =>
       list.map((ex) => {
         if (ex.k !== exK) return ex
+        const hist = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
+        const histNext = hist?.sets?.[ex.sets.length]
+        if (histNext) {
+          return { ...ex, sets: [...ex.sets, historySet(histNext)] }
+        }
         const last = ex.sets[ex.sets.length - 1]
         const copy = last
-          ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, feel: '' }
+          ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, feel: '', touched: true }
           : blankSet(defaultUnit)
         return { ...ex, sets: [...ex.sets, copy] }
       })
@@ -250,6 +291,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const ExPic = PICTOGRAMS[pictogramFor(ex.name)]
         const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
+        const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
         const targetReps = targets[ex.name.trim().toLowerCase()] || null
         return (
         <div className="exercise-block" key={ex.k}>
@@ -281,13 +323,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             />
           )}
 
-          {(lastSession || ex.name.trim()) && (
+          {(bestSet || ex.name.trim()) && (
             <div className="last-time-row">
-              {lastSession ? (
+              {bestSet ? (
                 <span className="small">
-                  Last time: {lastSession.sets.map((s, idx) => (
-                    <span key={idx}>{idx > 0 ? ', ' : ''}{s.weight ?? '–'}{s.unit === 'lbs' ? 'lb' : 'kg'}×{s.reps ?? '–'}</span>
-                  ))}
+                  🏆 Best: <strong style={{ color: 'var(--ink)' }}>{bestSet.weight}{bestSet.unit === 'lbs' ? 'lb' : 'kg'}×{bestSet.reps}{bestSet.perSide ? '/side' : ''}</strong>
                 </span>
               ) : <span className="small">No history for this exercise yet</span>}
               {targetReps ? (
@@ -305,7 +345,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           {ex.sets.map((s, i) => {
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
             const lastSet = lastSession?.sets?.[i]
-            const cmp = compareSet(s, lastSet, targetReps)
+            const cmp = s.touched ? compareSet(s, lastSet, targetReps) : null
             return (
               <div key={s.k}>
                 {cmp && (
@@ -318,7 +358,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     {cmp.status === 'holding' && `Same as last time`}
                   </div>
                 )}
-                <div className="set-row">
+                {!s.touched && s.weight !== '' && (
+                  <div className="set-compare set-compare-suggested">Suggested from last time — tap to confirm</div>
+                )}
+                <div className={`set-row ${!s.touched && s.weight !== '' ? 'set-row-suggested' : ''}`}>
                   <span className="set-index">{i + 1}</span>
                   <input
                     className="input"

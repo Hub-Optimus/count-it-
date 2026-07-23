@@ -441,6 +441,17 @@ input[type='date'].input { color-scheme: dark; }
 .set-compare-below-last { color: var(--red); }
 .set-compare-holding { color: var(--ink-faint); }
 
+.set-compare-suggested {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.set-row-suggested .input {
+  color: var(--ink-faint);
+  border-style: dashed;
+  background: transparent;
+}
+
 .set-row {
   display: grid;
   grid-template-columns: 20px 1fr 52px 14px 72px 56px 30px;

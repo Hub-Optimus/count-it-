@@ -15,6 +15,38 @@ export function lastSessionFor(workouts, exerciseName, excludeWorkoutId) {
   return { date: w.date, sets: ex.sets }
 }
 
+// The single best set ever logged for this exercise (highest estimated
+// 1RM across all history), for showing "Best: 15kg×10" as a permanent
+// reference distinct from "last time" (which is now used to pre-fill
+// the set rows directly, not shown as separate text).
+const e1rmLocal = (weightKg, reps) => {
+  const r = Math.min(reps || 0, 12)
+  if (!r || !weightKg) return 0
+  return weightKg * (1 + r / 30)
+}
+
+export function bestSetEver(workouts, exerciseName, excludeWorkoutId) {
+  const nl = exerciseName.trim().toLowerCase()
+  let best = null
+  let bestE1rm = 0
+  for (const w of workouts) {
+    if (w.id === excludeWorkoutId) continue
+    for (const ex of w.exercises) {
+      if (ex.name.trim().toLowerCase() !== nl) continue
+      for (const s of ex.sets) {
+        if (s.weight == null || !s.reps) continue
+        const kg = toKg(Number(s.weight), s.unit)
+        const est = e1rmLocal(kg, s.reps)
+        if (est > bestE1rm) {
+          bestE1rm = est
+          best = { weight: s.weight, unit: s.unit, reps: s.reps, perSide: s.per_side }
+        }
+      }
+    }
+  }
+  return best
+}
+
 // Compare one current set to the same-position set from last time.
 // Returns null if there's nothing to compare against (first time doing
 // this exercise, or this set position didn't exist last time).
