@@ -18,12 +18,10 @@ const DRAFT_KEY = 'countit-draft-v1'
 let seq = 0
 const nextKey = () => `k${++seq}`
 
-// touched:true = this set's numbers reflect what the user actually did
-// (typed fresh, or loaded from a saved workout). touched:false = these
-// numbers are a suggestion copied from history, not yet confirmed - the
-// UI dims them and the progression comparison stays quiet until the user
-// actually edits the field.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '', touched: true })
+// Sets pre-filled from history behave exactly like any other set - no
+// separate "confirm" step, matching how Strong/Hevy handle this: the
+// pre-filled number IS the value, Save is the only confirmation needed.
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '' })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)] })
 
 function historySet(histSet) {
@@ -34,7 +32,6 @@ function historySet(histSet) {
     reps: histSet.reps ?? '',
     perSide: Boolean(histSet.per_side),
     feel: '',
-    touched: false,
   }
 }
 
@@ -50,7 +47,6 @@ function toModel(workout) {
       reps: s.reps ?? '',
       perSide: Boolean(s.per_side),
       feel: s.feel || '',
-      touched: true,
     })),
   }))
 }
@@ -141,35 +137,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function updateSet(exK, setK, patch) {
     touch()
-    const marksConfirmed = 'weight' in patch || 'reps' in patch
     setExercises((list) =>
       list.map((ex) =>
         ex.k === exK
-          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, ...patch, touched: marksConfirmed ? true : s.touched } : s)) }
-          : ex
-      )
-    )
-  }
-
-  // Accept a suggested-from-history set exactly as shown, no retyping needed
-  function confirmSet(exK, setK) {
-    touch()
-    setExercises((list) =>
-      list.map((ex) =>
-        ex.k === exK
-          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, touched: true } : s)) }
-          : ex
-      )
-    )
-  }
-
-  // Accept every suggested set in this exercise at once, exactly as shown
-  function confirmAllSets(exK) {
-    touch()
-    setExercises((list) =>
-      list.map((ex) =>
-        ex.k === exK
-          ? { ...ex, sets: ex.sets.map((s) => ({ ...s, touched: true })) }
+          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, ...patch } : s)) }
           : ex
       )
     )
@@ -187,7 +158,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         }
         const last = ex.sets[ex.sets.length - 1]
         const copy = last
-          ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, feel: '', touched: true }
+          ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, feel: '' }
           : blankSet(defaultUnit)
         return { ...ex, sets: [...ex.sets, copy] }
       })
@@ -369,7 +340,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           {ex.sets.map((s, i) => {
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
             const lastSet = lastSession?.sets?.[i]
-            const cmp = s.touched ? compareSet(s, lastSet, targetReps) : null
+            const cmp = compareSet(s, lastSet, targetReps)
             return (
               <div key={s.k}>
                 {cmp && (
@@ -382,12 +353,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     {cmp.status === 'holding' && `Same as last time`}
                   </div>
                 )}
-                {!s.touched && s.weight !== '' && (
-                  <div className="set-compare set-compare-suggested">
-                    Suggested from last time — confirm with ✓ or edit to change
-                  </div>
-                )}
-                <div className={`set-row ${!s.touched && s.weight !== '' ? 'set-row-suggested' : ''}`}>
+                <div className="set-row">
                   <span className="set-index">{i + 1}</span>
                   <input
                     className="input"
@@ -432,9 +398,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   >
                     /side
                   </button>
-                  {!s.touched ? (
-                    <button className="confirm-tick" onClick={() => confirmSet(ex.k, s.k)} aria-label={`Confirm set ${i + 1} as shown`} title="Confirm as-is">✓</button>
-                  ) : <span />}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>–</button>
                 </div>
                 <div className="set-feel">
@@ -459,11 +422,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             )
           })}
 
-          {ex.sets.some((s) => !s.touched) && (
-            <button className="btn btn-block confirm-all-btn" onClick={() => confirmAllSets(ex.k)}>
-              ✓ Confirm all sets as shown
-            </button>
-          )}
           <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
         </div>
         )

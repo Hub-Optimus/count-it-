@@ -441,20 +441,9 @@ input[type='date'].input { color-scheme: dark; }
 .set-compare-below-last { color: var(--red); }
 .set-compare-holding { color: var(--ink-faint); }
 
-.set-compare-suggested {
-  color: var(--ink-faint);
-  font-style: italic;
-}
-
-.set-row-suggested .input {
-  color: var(--ink-faint);
-  border-style: dashed;
-  background: transparent;
-}
-
 .set-row {
   display: grid;
-  grid-template-columns: 20px 1fr 52px 14px 72px 56px 30px 30px;
+  grid-template-columns: 20px 1fr 52px 14px 72px 56px 30px;
   gap: 6px;
   align-items: center;
   margin-bottom: 6px;
@@ -613,21 +602,6 @@ input[type='date'].input { color-scheme: dark; }
   color: var(--red);
   font-size: 18px;
   min-height: 44px;
-}
-
-.confirm-tick {
-  border: none;
-  background: transparent;
-  color: var(--green);
-  font-size: 18px;
-  font-weight: 700;
-  min-height: 44px;
-}
-
-.confirm-all-btn {
-  background: var(--green);
-  border-color: var(--green);
-  color: #081208;
 }
 
 .set-feel { margin: 2px 0 10px 26px; display: flex; flex-wrap: wrap; gap: 6px; }
