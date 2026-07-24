@@ -4,7 +4,7 @@ import { todayISO } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
-import { lastSessionFor, compareSet, bestSetEver, hitTargetLastTime } from '../lib/setComparison'
+import { lastSessionFor, bestSetEver, averageRepsEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
 const FEELS = [
@@ -286,6 +286,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
+        const avgReps = ex.name.trim() ? averageRepsEver(workouts, ex.name, workout?.id) : null
         const targetReps = targets[ex.name.trim().toLowerCase()] || null
         const readyToProgress = hitTargetLastTime(lastSession, targetReps)
         const validSets = ex.sets.filter((st) => st.weight !== '' && st.reps !== '')
@@ -345,11 +346,21 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
           {(bestSet || ex.name.trim()) && (
           <div className="last-time-row">
+            <div className="ref-lines">
               {bestSet ? (
                 <span className="small">
                   🏆 Best: <strong style={{ color: 'var(--ink)' }}>{bestSet.weight}{bestSet.unit === 'lbs' ? 'lb' : 'kg'}×{bestSet.reps}{bestSet.perSide ? '/side' : ''}</strong>
+                  {avgReps != null && <> · avg {avgReps} reps/set</>}
                 </span>
               ) : <span className="small">No history for this exercise yet</span>}
+              {lastSession && (
+                <span className="small">
+                  Last time: {lastSession.sets.map((s, idx) => (
+                    <span key={idx}>{idx > 0 ? ', ' : ''}{s.weight ?? '–'}{s.unit === 'lbs' ? 'lb' : 'kg'}×{s.reps ?? '–'}</span>
+                  ))}
+                </span>
+              )}
+            </div>
               {targetReps ? (
                 <button className="target-chip" onClick={() => { const v = window.prompt('Target reps for this exercise', String(targetReps)); const n = parseInt(v, 10); if (Number.isFinite(n) && n > 0) setTargetFor(ex.name, n) }}>
                   🎯 {targetReps} rep target
@@ -364,20 +375,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
           {ex.sets.map((s, i) => {
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
-            const lastSet = lastSession?.sets?.[i]
-            const cmp = compareSet(s, lastSet, targetReps)
             return (
               <div key={s.k}>
-                {cmp && (
-                  <div className={`set-compare set-compare-${cmp.status}`}>
-                    {cmp.status === 'progressing' && `↑ Up from last time (was ${cmp.lastKg}kg)`}
-                    {cmp.status === 'regressed' && `↓ Down from last time (was ${cmp.lastKg}kg)`}
-                    {cmp.status === 'target-hit' && `🎯 Target hit — try more weight next time`}
-                    {cmp.status === 'building' && `Building — ${cmp.targetReps - s.reps} more reps to target`}
-                    {cmp.status === 'below-last' && `↓ Fewer reps than last time (was ${cmp.lastReps})`}
-                    {cmp.status === 'holding' && `Same as last time`}
-                  </div>
-                )}
                 <div className="set-row">
                   <span className="set-index">{i + 1}</span>
                   <input

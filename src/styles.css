@@ -412,13 +412,20 @@ input[type='date'].input { color-scheme: dark; }
 
 .last-time-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px dashed var(--line);
+}
+
+.ref-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .target-chip {
