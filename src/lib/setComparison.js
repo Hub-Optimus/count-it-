@@ -69,6 +69,28 @@ export function averageRepsEver(workouts, exerciseName, excludeWorkoutId) {
   return Math.round((total / count) * 10) / 10 // one decimal, e.g. 13.7
 }
 
+// Average weight per set across all history for this exercise, in kg -
+// a realistic restart point after a break, distinct from the peak
+// (Best) or a single potentially-unrepresentative last session.
+export function averageWeightEver(workouts, exerciseName, excludeWorkoutId) {
+  const nl = exerciseName.trim().toLowerCase()
+  let total = 0
+  let count = 0
+  for (const w of workouts) {
+    if (w.id === excludeWorkoutId) continue
+    for (const ex of w.exercises) {
+      if (ex.name.trim().toLowerCase() !== nl) continue
+      for (const s of ex.sets) {
+        if (s.weight == null || !s.reps) continue
+        total += toKg(Number(s.weight), s.unit)
+        count += 1
+      }
+    }
+  }
+  if (!count) return null
+  return Math.round((total / count) * 10) / 10
+}
+
 // True if every set in last session hit (or exceeded) the rep target -
 // the double-progression signal that it's time to move up in weight,
 // shown BEFORE the user re-logs the same numbers, not after.

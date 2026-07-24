@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget } from '../lib/db'
-import { todayISO } from '../lib/format'
+import { todayISO, toKg } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
-import { lastSessionFor, bestSetEver, averageRepsEver, hitTargetLastTime } from '../lib/setComparison'
+import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
 const FEELS = [
@@ -287,7 +287,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
         const avgReps = ex.name.trim() ? averageRepsEver(workouts, ex.name, workout?.id) : null
+        const avgWeight = ex.name.trim() ? averageWeightEver(workouts, ex.name, workout?.id) : null
         const targetReps = targets[ex.name.trim().toLowerCase()] || null
+        const targetWeightRef = lastSession?.sets?.length
+          ? lastSession.sets.reduce((max, s) => (s.weight != null && (!max || toKg(s.weight, s.unit) > toKg(max.weight, max.unit)) ? s : max), null)
+          : null
         const readyToProgress = hitTargetLastTime(lastSession, targetReps)
         const validSets = ex.sets.filter((st) => st.weight !== '' && st.reps !== '')
         const summaryBest = validSets.length
@@ -340,7 +344,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
           {readyToProgress && (
             <div className="progress-notice">
-              🎯 You hit {targetReps} reps on every set last time — probably time to add weight (double progression).
+              🎯 You hit {targetReps} reps at every weight (up to {targetWeightRef ? `${targetWeightRef.weight}${targetWeightRef.unit === 'lbs' ? 'lb' : 'kg'}` : 'your top set'}) last time — probably time to add weight (double progression).
             </div>
           )}
 
@@ -350,7 +354,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               {bestSet ? (
                 <span className="small">
                   🏆 Best: <strong style={{ color: 'var(--ink)' }}>{bestSet.weight}{bestSet.unit === 'lbs' ? 'lb' : 'kg'}×{bestSet.reps}{bestSet.perSide ? '/side' : ''}</strong>
-                  {avgReps != null && <> · avg {avgReps} reps/set</>}
+                  {avgReps != null && <> · avg {avgWeight}kg×{avgReps} reps</>}
                 </span>
               ) : <span className="small">No history for this exercise yet</span>}
               {lastSession && (
@@ -363,7 +367,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             </div>
               {targetReps ? (
                 <button className="target-chip" onClick={() => { const v = window.prompt('Target reps for this exercise', String(targetReps)); const n = parseInt(v, 10); if (Number.isFinite(n) && n > 0) setTargetFor(ex.name, n) }}>
-                  🎯 {targetReps} rep target
+                  🎯 {targetReps} reps{targetWeightRef ? ` @ ${targetWeightRef.weight}${targetWeightRef.unit === 'lbs' ? 'lb' : 'kg'}` : ''}
                 </button>
               ) : (
                 <button className="target-chip target-chip-empty" onClick={() => { const v = window.prompt(`Set a rep target for ${ex.name.trim()}? (e.g. 15)`); const n = parseInt(v, 10); if (Number.isFinite(n) && n > 0) setTargetFor(ex.name, n) }}>
