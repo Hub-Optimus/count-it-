@@ -5,6 +5,7 @@ import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, compareSet, bestSetEver } from '../lib/setComparison'
+import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
 const FEELS = [
   { value: 'easy', cls: 'f-easy' },
@@ -13,7 +14,6 @@ const FEELS = [
   { value: 'very heavy', cls: 'f-vheavy' },
 ]
 const FEEL_VALUES = FEELS.map((f) => f.value)
-const DRAFT_KEY = 'countit-draft-v1'
 
 let seq = 0
 const nextKey = () => `k${++seq}`
@@ -53,14 +53,8 @@ function toModel(workout) {
 }
 
 function readDraft(target) {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY)
-    if (!raw) return null
-    const d = JSON.parse(raw)
-    return d && d.target === target && Array.isArray(d.exercises) ? d : null
-  } catch {
-    return null
-  }
+  const d = peekDraft()
+  return d && d.target === target ? d : null
 }
 
 export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, onClose, onSaved }) {
@@ -108,7 +102,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   function discardDraft() {
-    localStorage.removeItem(DRAFT_KEY)
+    clearDraft()
     setDraft(null)
   }
 
@@ -199,7 +193,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function cancel() {
     if (dirtyRef.current && hasContent() && !window.confirm('Discard changes?')) return
-    if (dirtyRef.current) localStorage.removeItem(DRAFT_KEY) // keep an un-resumed draft recoverable
+    if (dirtyRef.current) clearDraft() // keep an un-resumed draft recoverable
     onClose()
   }
 
@@ -208,7 +202,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setSaving(true)
     try {
       await deleteWorkout(workout.id)
-      localStorage.removeItem(DRAFT_KEY)
+      clearDraft()
       onSaved()
     } catch (e) {
       setError(e.message || 'Could not delete. Check your connection and try again.')
@@ -245,7 +239,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
-      localStorage.removeItem(DRAFT_KEY)
+      clearDraft()
       onSaved()
     } catch (e) {
       setError(e.message || 'Could not save. Your entries are kept on this phone - try again when you have signal.')

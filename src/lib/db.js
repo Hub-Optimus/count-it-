@@ -74,6 +74,30 @@ export async function deleteWorkout(workoutId) {
   if (error) throw error
 }
 
+// Combine two same-day workouts into one. Composes the already-tested
+// update/delete functions rather than new low-level SQL, to keep this
+// destructive operation as low-risk as possible. Exercises from both are
+// kept as separate entries (no attempt to merge same-named exercises'
+// sets together) - safer and unambiguous, if slightly less tidy.
+export async function mergeWorkouts(userId, keepWorkout, mergeFromWorkout) {
+  const toPlainExercises = (w) =>
+    w.exercises.map((ex) => ({
+      name: ex.name,
+      sets: ex.sets.map((s) => ({
+        weight: s.weight, unit: s.unit, reps: s.reps, perSide: s.per_side, feel: s.feel,
+      })),
+    }))
+  const combinedExercises = [...toPlainExercises(keepWorkout), ...toPlainExercises(mergeFromWorkout)]
+  const combinedNotes = [keepWorkout.notes, mergeFromWorkout.notes].filter(Boolean).join(' | ') || null
+  await updateFullWorkout(userId, keepWorkout.id, {
+    date: keepWorkout.date,
+    split: keepWorkout.split || mergeFromWorkout.split || null,
+    notes: combinedNotes,
+    exercises: combinedExercises,
+  })
+  await deleteWorkout(mergeFromWorkout.id)
+}
+
 // ---- profiles (F1: goals) ----
 
 export async function fetchProfile(userId) {
