@@ -47,6 +47,60 @@ export function bestSetEver(workouts, exerciseName, excludeWorkoutId) {
   return best
 }
 
+// Average reps per set across all history for this exercise — a "typical"
+// reference distinct from the best-ever set, since a low-energy day
+// shouldn't be judged against a personal peak.
+export function averageRepsEver(workouts, exerciseName, excludeWorkoutId) {
+  const nl = exerciseName.trim().toLowerCase()
+  let total = 0
+  let count = 0
+  for (const w of workouts) {
+    if (w.id === excludeWorkoutId) continue
+    for (const ex of w.exercises) {
+      if (ex.name.trim().toLowerCase() !== nl) continue
+      for (const s of ex.sets) {
+        if (s.weight == null || !s.reps) continue
+        total += Number(s.reps)
+        count += 1
+      }
+    }
+  }
+  if (!count) return null
+  return Math.round((total / count) * 10) / 10 // one decimal, e.g. 13.7
+}
+
+// Average weight per set across all history for this exercise, in kg -
+// a realistic restart point after a break, distinct from the peak
+// (Best) or a single potentially-unrepresentative last session.
+export function averageWeightEver(workouts, exerciseName, excludeWorkoutId) {
+  const nl = exerciseName.trim().toLowerCase()
+  let total = 0
+  let count = 0
+  for (const w of workouts) {
+    if (w.id === excludeWorkoutId) continue
+    for (const ex of w.exercises) {
+      if (ex.name.trim().toLowerCase() !== nl) continue
+      for (const s of ex.sets) {
+        if (s.weight == null || !s.reps) continue
+        total += toKg(Number(s.weight), s.unit)
+        count += 1
+      }
+    }
+  }
+  if (!count) return null
+  return Math.round((total / count) * 10) / 10
+}
+
+// True if every set in last session hit (or exceeded) the rep target -
+// the double-progression signal that it's time to move up in weight,
+// shown BEFORE the user re-logs the same numbers, not after.
+export function hitTargetLastTime(lastSession, targetReps) {
+  if (!lastSession || !targetReps) return false
+  const validSets = lastSession.sets.filter((s) => s.weight != null && s.reps)
+  if (!validSets.length) return false
+  return validSets.every((s) => s.reps >= targetReps)
+}
+
 // Compare one current set to the same-position set from last time.
 // Returns null if there's nothing to compare against (first time doing
 // this exercise, or this set position didn't exist last time).
