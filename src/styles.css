@@ -441,27 +441,6 @@ input[type='date'].input { color-scheme: dark; }
 .set-compare-below-last { color: var(--red); }
 .set-compare-holding { color: var(--ink-faint); }
 
-.set-compare-suggested {
-  display: block;
-  width: 100%;
-  text-align: left;
-  color: var(--ink-faint);
-  font-style: italic;
-  background: none;
-  border: none;
-  padding: 0;
-  min-height: 30px;
-  cursor: pointer;
-}
-
-.set-compare-suggested:active { color: var(--ink); }
-
-.set-row-suggested .input {
-  color: var(--ink-faint);
-  border-style: dashed;
-  background: transparent;
-}
-
 .set-row {
   display: grid;
   grid-template-columns: 20px 1fr 52px 14px 72px 56px 30px;
@@ -505,6 +484,27 @@ input[type='date'].input { color-scheme: dark; }
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.done-btn {
+  flex: none;
+  width: auto;
+  padding: 0 10px;
+  color: var(--green);
+  border-color: var(--green);
+  background: transparent;
+  font-weight: 700;
+}
+
+.exercise-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 4px 0 2px;
+  min-height: 36px;
 }
 
 /* ---------- exercise picker overlay ---------- */
@@ -620,7 +620,7 @@ input[type='date'].input { color-scheme: dark; }
 .remove-set {
   border: none;
   background: transparent;
-  color: var(--ink-faint);
+  color: var(--red);
   font-size: 18px;
   min-height: 44px;
 }

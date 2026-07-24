@@ -5,6 +5,7 @@ import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, compareSet, bestSetEver } from '../lib/setComparison'
+import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
 const FEELS = [
   { value: 'easy', cls: 'f-easy' },
@@ -13,18 +14,15 @@ const FEELS = [
   { value: 'very heavy', cls: 'f-vheavy' },
 ]
 const FEEL_VALUES = FEELS.map((f) => f.value)
-const DRAFT_KEY = 'countit-draft-v1'
 
 let seq = 0
 const nextKey = () => `k${++seq}`
 
-// touched:true = this set's numbers reflect what the user actually did
-// (typed fresh, or loaded from a saved workout). touched:false = these
-// numbers are a suggestion copied from history, not yet confirmed - the
-// UI dims them and the progression comparison stays quiet until the user
-// actually edits the field.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '', touched: true })
-const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)] })
+// Sets pre-filled from history behave exactly like any other set - no
+// separate "confirm" step, matching how Strong/Hevy handle this: the
+// pre-filled number IS the value, Save is the only confirmation needed.
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '' })
+const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false })
 
 function historySet(histSet) {
   return {
@@ -34,7 +32,6 @@ function historySet(histSet) {
     reps: histSet.reps ?? '',
     perSide: Boolean(histSet.per_side),
     feel: '',
-    touched: false,
   }
 }
 
@@ -43,6 +40,7 @@ function toModel(workout) {
   return workout.exercises.map((ex) => ({
     k: nextKey(),
     name: ex.name,
+    collapsed: false,
     sets: ex.sets.map((s) => ({
       k: nextKey(),
       weight: s.weight ?? '',
@@ -50,20 +48,13 @@ function toModel(workout) {
       reps: s.reps ?? '',
       perSide: Boolean(s.per_side),
       feel: s.feel || '',
-      touched: true,
     })),
   }))
 }
 
 function readDraft(target) {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY)
-    if (!raw) return null
-    const d = JSON.parse(raw)
-    return d && d.target === target && Array.isArray(d.exercises) ? d : null
-  } catch {
-    return null
-  }
+  const d = peekDraft()
+  return d && d.target === target ? d : null
 }
 
 export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, onClose, onSaved }) {
@@ -111,7 +102,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   function discardDraft() {
-    localStorage.removeItem(DRAFT_KEY)
+    clearDraft()
     setDraft(null)
   }
 
@@ -141,23 +132,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function updateSet(exK, setK, patch) {
     touch()
-    const marksConfirmed = 'weight' in patch || 'reps' in patch
     setExercises((list) =>
       list.map((ex) =>
         ex.k === exK
-          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, ...patch, touched: marksConfirmed ? true : s.touched } : s)) }
-          : ex
-      )
-    )
-  }
-
-  // Accept a suggested-from-history set exactly as shown, no retyping needed
-  function confirmSet(exK, setK) {
-    touch()
-    setExercises((list) =>
-      list.map((ex) =>
-        ex.k === exK
-          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, touched: true } : s)) }
+          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, ...patch } : s)) }
           : ex
       )
     )
@@ -175,7 +153,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         }
         const last = ex.sets[ex.sets.length - 1]
         const copy = last
-          ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, feel: '', touched: true }
+          ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, feel: '' }
           : blankSet(defaultUnit)
         return { ...ex, sets: [...ex.sets, copy] }
       })
@@ -200,6 +178,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setExercises((list) => list.filter((e) => e.k !== exK))
   }
 
+  function toggleCollapsed(exK) {
+    setExercises((list) => list.map((ex) => (ex.k === exK ? { ...ex, collapsed: !ex.collapsed } : ex)))
+  }
+
   function copyPreviousSession() {
     const src = workouts.find((w) => w.id !== workout?.id)
     if (!src) return
@@ -211,7 +193,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function cancel() {
     if (dirtyRef.current && hasContent() && !window.confirm('Discard changes?')) return
-    if (dirtyRef.current) localStorage.removeItem(DRAFT_KEY) // keep an un-resumed draft recoverable
+    if (dirtyRef.current) clearDraft() // keep an un-resumed draft recoverable
     onClose()
   }
 
@@ -220,7 +202,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setSaving(true)
     try {
       await deleteWorkout(workout.id)
-      localStorage.removeItem(DRAFT_KEY)
+      clearDraft()
       onSaved()
     } catch (e) {
       setError(e.message || 'Could not delete. Check your connection and try again.')
@@ -257,7 +239,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
-      localStorage.removeItem(DRAFT_KEY)
+      clearDraft()
       onSaved()
     } catch (e) {
       setError(e.message || 'Could not save. Your entries are kept on this phone - try again when you have signal.')
@@ -271,7 +253,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         <button className="btn btn-ghost" onClick={cancel}>Cancel</button>
         <div className="screen-title">{workout ? 'Edit session' : 'New session'}</div>
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Finishing…' : 'Finish'}
         </button>
       </div>
 
@@ -305,6 +287,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
         const targetReps = targets[ex.name.trim().toLowerCase()] || null
+        const validSets = ex.sets.filter((st) => st.weight !== '' && st.reps !== '')
+        const summaryBest = validSets.length
+          ? validSets.reduce((best, st) => (Number(st.weight) > Number(best.weight) ? st : best), validSets[0])
+          : null
         return (
         <div className="exercise-block" key={ex.k}>
           <div className="exercise-head">
@@ -324,9 +310,24 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
               </svg>
             </button>
+            {!ex.collapsed && ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
+              <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
+                ✓ Done
+              </button>
+            )}
             <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
           </div>
 
+          {ex.collapsed ? (
+            <button className="exercise-summary" onClick={() => toggleCollapsed(ex.k)}>
+              <span className="small">
+                {validSets.length} set{validSets.length === 1 ? '' : 's'}
+                {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
+              </span>
+              <span className="small" style={{ color: 'var(--yellow)' }}>Edit</span>
+            </button>
+          ) : (
+          <>
           {pickerFor === ex.k && (
             <ExercisePicker
               recentNames={exerciseNames}
@@ -357,7 +358,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           {ex.sets.map((s, i) => {
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
             const lastSet = lastSession?.sets?.[i]
-            const cmp = s.touched ? compareSet(s, lastSet, targetReps) : null
+            const cmp = compareSet(s, lastSet, targetReps)
             return (
               <div key={s.k}>
                 {cmp && (
@@ -370,12 +371,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     {cmp.status === 'holding' && `Same as last time`}
                   </div>
                 )}
-                {!s.touched && s.weight !== '' && (
-                  <button className="set-compare set-compare-suggested" onClick={() => confirmSet(ex.k, s.k)}>
-                    Suggested from last time — tap ✓ to confirm as-is
-                  </button>
-                )}
-                <div className={`set-row ${!s.touched && s.weight !== '' ? 'set-row-suggested' : ''}`}>
+                <div className="set-row">
                   <span className="set-index">{i + 1}</span>
                   <input
                     className="input"
@@ -445,6 +441,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           })}
 
           <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
+          </>
+          )}
         </div>
         )
       })}
@@ -472,7 +470,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           </button>
         )}
         <button className="btn btn-primary btn-block" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save session'}
+          {saving ? 'Finishing…' : 'Finish workout'}
         </button>
       </div>
     </div>

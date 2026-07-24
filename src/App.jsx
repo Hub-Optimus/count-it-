@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, configured } from './lib/supabase'
-import { fetchWorkouts, fetchProfile } from './lib/db'
+import { fetchWorkouts, fetchProfile, mergeWorkouts } from './lib/db'
+import { todayISO } from './lib/format'
+import { peekDraft } from './lib/draft'
 import TabBar, { Tally } from './components/TabBar'
 import Auth from './components/Auth'
 import WorkoutList from './components/WorkoutList'
@@ -109,6 +111,70 @@ function Main({ user }) {
     localStorage.setItem(UNIT_KEY, u)
   }
 
+  const [draftBanner, setDraftBanner] = useState(null)
+  useEffect(() => {
+    if (tab === 'log' && !editor) setDraftBanner(peekDraft())
+  }, [tab, editor])
+
+  const duplicateDatePairs = useMemo(() => {
+    if (!workouts) return []
+    const byDate = new Map()
+    for (const w of workouts) {
+      if (!byDate.has(w.date)) byDate.set(w.date, [])
+      byDate.get(w.date).push(w)
+    }
+    const pairs = []
+    for (const group of byDate.values()) {
+      if (group.length > 1) pairs.push(group) // rare to have 3+, but handle generically
+    }
+    return pairs
+  }, [workouts])
+
+  const [merging, setMerging] = useState(false)
+
+  async function doMerge(group) {
+    const [keep, ...rest] = [...group].sort((a, b) => b.exercises.length - a.exercises.length)
+    setMerging(true)
+    try {
+      for (const other of rest) {
+        await mergeWorkouts(user.id, keep, other)
+      }
+      await load()
+    } catch (e) {
+      window.alert(e.message || 'Could not merge those sessions.')
+    } finally {
+      setMerging(false)
+    }
+  }
+
+  function startNewWorkout() {
+    const draft = peekDraft()
+    if (draft) {
+      const target = draft.target === 'new' ? null : (workouts ?? []).find((w) => w.id === draft.target) || null
+      const resumeIt = window.confirm(
+        `You have an unfinished session from ${draft.date} (${draft.exercises.length} exercises) that was never finished. ` +
+        `Press OK to resume it, or Cancel to start a separate new session.`
+      )
+      if (resumeIt) {
+        setEditor({ workout: target })
+        return
+      }
+    }
+    const existing = (workouts ?? []).find((w) => w.date === todayISO())
+    if (existing) {
+      const label = existing.split || 'session'
+      const continueIt = window.confirm(
+        `You already logged a ${label} today (${existing.exercises.length} exercises). ` +
+        `Press OK to add more to it, or Cancel to start a separate new session for today.`
+      )
+      if (continueIt) {
+        setEditor({ workout: existing })
+        return
+      }
+    }
+    setEditor({ workout: null })
+  }
+
   if (profile === undefined) {
     return (
       <div className="splash">
@@ -149,7 +215,7 @@ function Main({ user }) {
         <span className="brand-sub">{user.email}</span>
         <h1 className="page-title">{pageTitle}</h1>
         {tab === 'log' && (
-          <button className="btn btn-primary header-action" onClick={() => setEditor({ workout: null })}>
+          <button className="btn btn-primary header-action" onClick={startNewWorkout}>
             + New workout
           </button>
         )}
@@ -161,8 +227,30 @@ function Main({ user }) {
         ) : (
           <>
             {loadError && <p className="error">{loadError}</p>}
+            {draftBanner && (
+              <div className="banner">
+                <span>Unfinished session from {draftBanner.date} ({draftBanner.exercises.length} exercises) — never finished.</span>
+                <span className="banner-actions">
+                  <button className="btn btn-ghost" onClick={() => setDraftBanner(null)}>Dismiss</button>
+                  <button className="btn" onClick={() => {
+                    const target = draftBanner.target === 'new' ? null : (workouts.find((w) => w.id === draftBanner.target) || null)
+                    setEditor({ workout: target })
+                  }}>Resume</button>
+                </span>
+              </div>
+            )}
+            {duplicateDatePairs.map((group) => (
+              <div className="banner" key={group[0].date}>
+                <span>{group.length} sessions logged on {group[0].date} — probably meant to be one.</span>
+                <span className="banner-actions">
+                  <button className="btn" disabled={merging} onClick={() => doMerge(group)}>
+                    {merging ? 'Merging…' : 'Merge'}
+                  </button>
+                </span>
+              </div>
+            ))}
             <WorkoutList workouts={workouts} onOpen={(w) => setEditor({ workout: w })} />
-            <button className="fab" onClick={() => setEditor({ workout: null })} aria-label="New workout">+</button>
+            <button className="fab" onClick={startNewWorkout} aria-label="New workout">+</button>
           </>
         )
       )}
