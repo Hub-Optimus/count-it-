@@ -4,7 +4,7 @@ import { todayISO } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
-import { lastSessionFor, compareSet, bestSetEver } from '../lib/setComparison'
+import { lastSessionFor, compareSet, bestSetEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
 const FEELS = [
@@ -287,6 +287,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
         const targetReps = targets[ex.name.trim().toLowerCase()] || null
+        const readyToProgress = hitTargetLastTime(lastSession, targetReps)
         const validSets = ex.sets.filter((st) => st.weight !== '' && st.reps !== '')
         const summaryBest = validSets.length
           ? validSets.reduce((best, st) => (Number(st.weight) > Number(best.weight) ? st : best), validSets[0])
@@ -336,8 +337,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             />
           )}
 
+          {readyToProgress && (
+            <div className="progress-notice">
+              🎯 You hit {targetReps} reps on every set last time — probably time to add weight (double progression).
+            </div>
+          )}
+
           {(bestSet || ex.name.trim()) && (
-            <div className="last-time-row">
+          <div className="last-time-row">
               {bestSet ? (
                 <span className="small">
                   🏆 Best: <strong style={{ color: 'var(--ink)' }}>{bestSet.weight}{bestSet.unit === 'lbs' ? 'lb' : 'kg'}×{bestSet.reps}{bestSet.perSide ? '/side' : ''}</strong>

@@ -47,6 +47,16 @@ export function bestSetEver(workouts, exerciseName, excludeWorkoutId) {
   return best
 }
 
+// True if every set in last session hit (or exceeded) the rep target -
+// the double-progression signal that it's time to move up in weight,
+// shown BEFORE the user re-logs the same numbers, not after.
+export function hitTargetLastTime(lastSession, targetReps) {
+  if (!lastSession || !targetReps) return false
+  const validSets = lastSession.sets.filter((s) => s.weight != null && s.reps)
+  if (!validSets.length) return false
+  return validSets.every((s) => s.reps >= targetReps)
+}
+
 // Compare one current set to the same-position set from last time.
 // Returns null if there's nothing to compare against (first time doing
 // this exercise, or this set position didn't exist last time).
