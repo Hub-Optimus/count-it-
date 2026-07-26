@@ -286,7 +286,7 @@ function ProgressTab({ user, workouts, profile }) {
       </div>
       {view === 'goals' && <GoalProgress user={user} workouts={workouts} profile={profile} />}
       {view === 'trends' && <Trends workouts={workouts} profile={profile} />}
-      {view === 'exercise' && <Progress workouts={workouts} />}
+      {view === 'exercise' && <Progress user={user} workouts={workouts} />}
     </div>
   )
 }

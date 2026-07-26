@@ -72,10 +72,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     fetchExerciseTargets(user.id).then(setTargets).catch(() => {})
   }, [user.id])
 
-  async function setTargetFor(exerciseName, reps) {
-    setTargets((t) => ({ ...t, [exerciseName.trim().toLowerCase()]: reps }))
+  async function setTargetFor(exerciseName, reps, seedWeight = null, seedWeightUnit = null) {
+    const key = exerciseName.trim().toLowerCase()
+    setTargets((t) => ({ ...t, [key]: { reps, seedWeight, seedWeightUnit } }))
     try {
-      await saveExerciseTarget(user.id, exerciseName.trim(), reps)
+      await saveExerciseTarget(user.id, exerciseName.trim(), reps, seedWeight, seedWeightUnit)
     } catch { /* best effort - local state already updated */ }
   }
   const dirtyRef = useRef(false)
@@ -288,10 +289,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
         const avgReps = ex.name.trim() ? averageRepsEver(workouts, ex.name, workout?.id) : null
         const avgWeight = ex.name.trim() ? averageWeightEver(workouts, ex.name, workout?.id) : null
-        const targetReps = targets[ex.name.trim().toLowerCase()] || null
+        const targetInfo = targets[ex.name.trim().toLowerCase()] || null
+        const targetReps = targetInfo?.reps || null
         const targetWeightRef = lastSession?.sets?.length
           ? lastSession.sets.reduce((max, s) => (s.weight != null && (!max || toKg(s.weight, s.unit) > toKg(max.weight, max.unit)) ? s : max), null)
-          : null
+          : (targetInfo?.seedWeight != null ? { weight: targetInfo.seedWeight, unit: targetInfo.seedWeightUnit || 'kg' } : null)
         const readyToProgress = hitTargetLastTime(lastSession, targetReps)
         const validSets = ex.sets.filter((st) => st.weight !== '' && st.reps !== '')
         const summaryBest = validSets.length
@@ -366,11 +368,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               )}
             </div>
               {targetReps ? (
-                <button className="target-chip" onClick={() => { const v = window.prompt('Target reps for this exercise', String(targetReps)); const n = parseInt(v, 10); if (Number.isFinite(n) && n > 0) setTargetFor(ex.name, n) }}>
+                <button className="target-chip" onClick={() => {
+                  const v = window.prompt('Target reps for this exercise', String(targetReps))
+                  const n = parseInt(v, 10)
+                  if (Number.isFinite(n) && n > 0) setTargetFor(ex.name, n, targetInfo?.seedWeight ?? null, targetInfo?.seedWeightUnit ?? null)
+                }}>
                   🎯 {targetReps} reps{targetWeightRef ? ` @ ${targetWeightRef.weight}${targetWeightRef.unit === 'lbs' ? 'lb' : 'kg'}` : ''}
                 </button>
               ) : (
-                <button className="target-chip target-chip-empty" onClick={() => { const v = window.prompt(`Set a rep target for ${ex.name.trim()}? (e.g. 15)`); const n = parseInt(v, 10); if (Number.isFinite(n) && n > 0) setTargetFor(ex.name, n) }}>
+                <button className="target-chip target-chip-empty" onClick={() => {
+                  const v = window.prompt(`Set a rep target for ${ex.name.trim()}? (e.g. 15)`)
+                  const n = parseInt(v, 10)
+                  if (!Number.isFinite(n) || n <= 0) return
+                  if (!lastSession) {
+                    const w = window.prompt(`What weight are you starting this at? (optional — leave blank to skip)`)
+                    const wNum = parseFloat(w)
+                    setTargetFor(ex.name, n, Number.isFinite(wNum) && wNum > 0 ? wNum : null, defaultUnit)
+                  } else {
+                    setTargetFor(ex.name, n)
+                  }
+                }}>
                   + Set target
                 </button>
               )}

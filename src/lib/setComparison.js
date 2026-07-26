@@ -91,6 +91,23 @@ export function averageWeightEver(workouts, exerciseName, excludeWorkoutId) {
   return Math.round((total / count) * 10) / 10
 }
 
+// Full history of attempts against a target, oldest first — for the
+// Progress view's "hit it or not" timeline. Deliberately NOT used in
+// the editor; that screen stays focused on logging, not analysis.
+export function achievementHistory(workouts, exerciseName, targetReps) {
+  if (!targetReps) return []
+  const nl = exerciseName.trim().toLowerCase()
+  const sessions = workouts
+    .filter((w) => w.exercises.some((ex) => ex.name.trim().toLowerCase() === nl))
+    .sort((a, b) => a.date.localeCompare(b.date))
+  return sessions.map((w) => {
+    const ex = w.exercises.find((e) => e.name.trim().toLowerCase() === nl)
+    const validSets = ex.sets.filter((s) => s.weight != null && s.reps)
+    const achieved = validSets.length > 0 && validSets.every((s) => s.reps >= targetReps)
+    return { date: w.date, achieved, sets: validSets }
+  })
+}
+
 // True if every set in last session hit (or exceeded) the rep target -
 // the double-progression signal that it's time to move up in weight,
 // shown BEFORE the user re-logs the same numbers, not after.
