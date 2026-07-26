@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { toKg, fmtVolume, fmtWeight, fmtDate } from '../lib/format'
+import { toKg, fmtVolume, fmtWeight, fmtDate, volumeMultiplier } from '../lib/format'
 import { Tally } from './TabBar'
 
 // --- metric helpers ---------------------------------------------------------
@@ -20,7 +20,7 @@ function perWorkout(workouts) {
       for (const s of ex.sets) {
         if (s.weight == null || !s.reps) continue
         const kg = toKg(Number(s.weight), s.unit)
-        const mult = s.per_side ? 2 : 1
+        const mult = volumeMultiplier(s)
         volume += kg * s.reps * mult
         const est = e1rm(kg, s.reps)
         if (est > best1rm) best1rm = est

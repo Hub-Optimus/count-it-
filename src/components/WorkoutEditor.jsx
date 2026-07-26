@@ -21,7 +21,7 @@ const nextKey = () => `k${++seq}`
 // Sets pre-filled from history behave exactly like any other set - no
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, feel: '' })
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '' })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false })
 
 function historySet(histSet) {
@@ -31,6 +31,7 @@ function historySet(histSet) {
     unit: histSet.unit || 'kg',
     reps: histSet.reps ?? '',
     perSide: Boolean(histSet.per_side),
+    side: histSet.side || null,
     feel: '',
   }
 }
@@ -47,6 +48,7 @@ function toModel(workout) {
       unit: s.unit,
       reps: s.reps ?? '',
       perSide: Boolean(s.per_side),
+      side: s.side || null,
       feel: s.feel || '',
     })),
   }))
@@ -142,21 +144,28 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     )
   }
 
+  const oppositeSide = (s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null)
+
   function addSet(exK) {
     touch()
     setExercises((list) =>
       list.map((ex) => {
         if (ex.k !== exK) return ex
+        const last = ex.sets[ex.sets.length - 1]
         const hist = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const histNext = hist?.sets?.[ex.sets.length]
+        let newSet
         if (histNext) {
-          return { ...ex, sets: [...ex.sets, historySet(histNext)] }
+          newSet = historySet(histNext)
+        } else {
+          newSet = last
+            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '' }
+            : blankSet(defaultUnit)
         }
-        const last = ex.sets[ex.sets.length - 1]
-        const copy = last
-          ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, feel: '' }
-          : blankSet(defaultUnit)
-        return { ...ex, sets: [...ex.sets, copy] }
+        // Alternating takes priority over whatever history/copy suggested -
+        // this is about today's actual left-right rhythm, not the past.
+        if (last?.side) newSet = { ...newSet, side: oppositeSide(last.side) }
+        return { ...ex, sets: [...ex.sets, newSet] }
       })
     )
   }
@@ -437,11 +446,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     onChange={(e) => updateSet(ex.k, s.k, { reps: e.target.value })}
                   />
                   <button
-                    className={`mini-btn ${s.perSide ? 'on' : ''}`}
-                    onClick={() => updateSet(ex.k, s.k, { perSide: !s.perSide })}
-                    title="Weight is per side / per hand"
+                    className={`mini-btn side-btn ${s.side ? 'on' : ''} ${s.side === 'L' ? 'side-l' : ''} ${s.side === 'R' ? 'side-r' : ''}`}
+                    onClick={() => updateSet(ex.k, s.k, { side: s.side === null ? 'L' : s.side === 'L' ? 'R' : null })}
+                    title="Which side — tap to cycle: unset → L → R"
                   >
-                    /side
+                    {s.side || '—'}
                   </button>
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>–</button>
                 </div>

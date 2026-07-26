@@ -495,6 +495,9 @@ input[type='date'].input { color-scheme: dark; }
 
 .mini-btn.on { color: var(--ink); border-color: var(--ink-faint); background: var(--bg-deep); }
 
+.side-btn.side-l { color: var(--blue); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.side-btn.side-r { color: var(--yellow); border-color: var(--yellow); background: color-mix(in srgb, var(--yellow) 14%, transparent); }
+
 .browse-btn {
   flex: none;
   width: 44px;

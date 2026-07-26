@@ -2,6 +2,14 @@ export const KG_PER_LB = 0.45359237
 
 export const toKg = (weight, unit) => (unit === 'lbs' ? weight * KG_PER_LB : weight)
 
+// A set tagged L/R already represents one side's own complete reps -
+// never double it, regardless of the (separate, older) per_side flag,
+// which means "this weight was held in each hand simultaneously."
+export const volumeMultiplier = (set) => {
+  if (set.side) return 1
+  return (set.per_side ?? set.perSide) ? 2 : 1
+}
+
 // 17.5 -> "17.5", 20 -> "20", 40.82 -> "40.82"
 export const fmtWeight = (w) => (w == null ? '' : String(Number(Number(w).toFixed(2))))
 

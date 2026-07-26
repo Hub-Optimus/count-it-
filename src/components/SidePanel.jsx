@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { toKg, fmtWeight, fmtVolume } from '../lib/format'
+import { toKg, fmtWeight, fmtVolume, volumeMultiplier } from '../lib/format'
 import { groupFor } from '../lib/exerciseLibrary'
 import { pctChange } from '../lib/goalAnalytics'
 
@@ -36,7 +36,7 @@ export default function SidePanel({ workouts, profile }) {
         for (const s of ex.sets) {
           if (s.weight == null || !s.reps) continue
           const kg = toKg(Number(s.weight), s.unit)
-          const mult = s.per_side ? 2 : 1
+          const mult = volumeMultiplier(s)
           const vol = kg * s.reps * mult
           totalVolume += vol
           if (inWeek) weekVolume += vol
