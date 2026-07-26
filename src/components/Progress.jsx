@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toKg, KG_PER_LB, fmtWeight, fmtVolume, fmtDate } from '../lib/format'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
+import { fetchExerciseTargets } from '../lib/db'
+import { achievementHistory } from '../lib/setComparison'
 import { Tally } from './TabBar'
 
 // Build: exercise name -> { sessions: [{date, bestKg, bestSet, volKg}], allLbs }
@@ -70,7 +72,12 @@ function Chart({ points, unit }) {
   )
 }
 
-export default function Progress({ workouts }) {
+export default function Progress({ user, workouts }) {
+  const [targets, setTargets] = useState({})
+  useEffect(() => {
+    fetchExerciseTargets(user.id).then(setTargets).catch(() => {})
+  }, [user.id])
+
   const stats = useMemo(() => buildStats(workouts), [workouts])
   const names = useMemo(
     () => [...stats.keys()].sort((a, b) => stats.get(b).sessions.length - stats.get(a).sessions.length || a.localeCompare(b)),
@@ -109,6 +116,8 @@ export default function Progress({ workouts }) {
 
   const NamePic = PICTOGRAMS[pictogramFor(name)]
   const nameColor = GROUP_COLOR[groupFor(name)] || GROUP_COLOR.Other
+  const targetInfo = targets[name.trim().toLowerCase()] || null
+  const history = targetInfo?.reps ? achievementHistory(workouts, name, targetInfo.reps) : []
 
   return (
     <div>
@@ -151,6 +160,23 @@ export default function Progress({ workouts }) {
           <div className="stat-label">Sessions</div>
         </div>
       </div>
+
+      {history.length > 0 && (
+        <div className="card">
+          <label className="label">🎯 {targetInfo.reps}-rep target — hit or miss</label>
+          {[...history].reverse().map((h, i) => (
+            <div className="session-row" key={`${h.date}-${i}`}>
+              <span className="session-date">{fmtDate(h.date)}</span>
+              <span className="session-best">
+                {h.sets.map((s, si) => `${s.weight}${s.unit === 'lbs' ? 'lb' : 'kg'}×${s.reps}`).join(', ')}
+              </span>
+              <span className={h.achieved ? 'goal-status goal-on' : 'goal-status goal-off'} style={{ fontSize: 12 }}>
+                {h.achieved ? '✓ Hit' : '— Miss'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card">
         {[...sessions].reverse().map((s, i) => (

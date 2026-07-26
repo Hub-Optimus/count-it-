@@ -154,16 +154,25 @@ export async function deleteBodyMetric(id) {
 export async function fetchExerciseTargets(userId) {
   const { data, error } = await supabase
     .from('exercise_targets')
-    .select('exercise_name, target_reps')
+    .select('exercise_name, target_reps, seed_weight, seed_weight_unit')
   if (error) throw error
   const map = {}
-  for (const row of data ?? []) map[row.exercise_name.toLowerCase()] = row.target_reps
+  for (const row of data ?? []) {
+    map[row.exercise_name.toLowerCase()] = {
+      reps: row.target_reps,
+      seedWeight: row.seed_weight,
+      seedWeightUnit: row.seed_weight_unit,
+    }
+  }
   return map
 }
 
-export async function saveExerciseTarget(userId, exerciseName, targetReps) {
+export async function saveExerciseTarget(userId, exerciseName, targetReps, seedWeight = null, seedWeightUnit = null) {
   const { error } = await supabase
     .from('exercise_targets')
-    .upsert({ user_id: userId, exercise_name: exerciseName, target_reps: targetReps, updated_at: new Date().toISOString() })
+    .upsert({
+      user_id: userId, exercise_name: exerciseName, target_reps: targetReps,
+      seed_weight: seedWeight, seed_weight_unit: seedWeightUnit, updated_at: new Date().toISOString(),
+    })
   if (error) throw error
 }

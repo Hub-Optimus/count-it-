@@ -75,3 +75,21 @@ alter table public.body_metrics enable row level security;
 
 create policy "own body metrics" on public.body_metrics
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Per-exercise rep targets (progressive overload) - see exercise-targets.sql
+create table if not exists public.exercise_targets (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  exercise_name text not null,
+  target_reps int not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, exercise_name)
+);
+
+alter table public.exercise_targets enable row level security;
+
+create policy "own exercise targets" on public.exercise_targets
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Seed weight for brand-new exercise targets - see target-seed-weight.sql
+alter table public.exercise_targets add column if not exists seed_weight numeric;
+alter table public.exercise_targets add column if not exists seed_weight_unit text check (seed_weight_unit in ('kg', 'lbs'));
