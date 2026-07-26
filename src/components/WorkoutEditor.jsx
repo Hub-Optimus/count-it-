@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget } from '../lib/db'
+import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides } from '../lib/db'
 import { todayISO, toKg } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
@@ -22,7 +22,7 @@ const nextKey = () => `k${++seq}`
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
 const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '' })
-const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false })
+const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false })
 
 function historySet(histSet) {
   return {
@@ -42,6 +42,7 @@ function toModel(workout) {
     k: nextKey(),
     name: ex.name,
     collapsed: false,
+    notes: ex.notes || '',
     sets: ex.sets.map((s) => ({
       k: nextKey(),
       weight: s.weight ?? '',
@@ -76,9 +77,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   async function setTargetFor(exerciseName, reps, seedWeight = null, seedWeightUnit = null) {
     const key = exerciseName.trim().toLowerCase()
-    setTargets((t) => ({ ...t, [key]: { reps, seedWeight, seedWeightUnit } }))
+    setTargets((t) => ({ ...t, [key]: { ...t[key], reps, seedWeight, seedWeightUnit } }))
     try {
       await saveExerciseTarget(user.id, exerciseName.trim(), reps, seedWeight, seedWeightUnit)
+    } catch { /* best effort - local state already updated */ }
+  }
+
+  async function enableTrackSides(exerciseName) {
+    const key = exerciseName.trim().toLowerCase()
+    setTargets((t) => ({ ...t, [key]: { ...t[key], trackSides: true } }))
+    // Seed set 1 with 'L' so the button never shows an ambiguous unset
+    // state once tracking is on for this exercise.
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.name.trim().toLowerCase() === key
+          ? { ...ex, sets: ex.sets.map((s, i) => (i === 0 && !s.side ? { ...s, side: 'L' } : s)) }
+          : ex
+      )
+    )
+    try {
+      await setTrackSides(user.id, exerciseName.trim(), true)
     } catch { /* best effort - local state already updated */ }
   }
   const dirtyRef = useRef(false)
@@ -226,6 +244,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     const payload = exercises
       .map((ex) => ({
         name: ex.name.trim(),
+        notes: ex.notes.trim() || null,
         sets: ex.sets
           .filter((s) => s.weight !== '' || s.reps !== '')
           .map((s) => {
@@ -236,6 +255,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               unit: s.unit,
               reps: Number.isFinite(r) ? r : null,
               perSide: s.perSide,
+              side: s.side || null,
               feel: s.feel.trim() || null,
             }
           }),
@@ -299,6 +319,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const avgReps = ex.name.trim() ? averageRepsEver(workouts, ex.name, workout?.id) : null
         const avgWeight = ex.name.trim() ? averageWeightEver(workouts, ex.name, workout?.id) : null
         const targetInfo = targets[ex.name.trim().toLowerCase()] || null
+        const sidesActive = Boolean(targetInfo?.trackSides) || ex.sets.some((s) => s.side)
         const targetReps = targetInfo?.reps || null
         const targetWeightRef = lastSession?.sets?.length
           ? lastSession.sets.reduce((max, s) => (s.weight != null && (!max || toKg(s.weight, s.unit) > toKg(max.weight, max.unit)) ? s : max), null)
@@ -334,6 +355,20 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             )}
             <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
           </div>
+
+          {(ex.notes || ex.notesOpen) ? (
+            <textarea
+              className="input exercise-note"
+              placeholder="Note for this exercise (e.g. a twinge, a form cue, equipment used)"
+              value={ex.notes}
+              onChange={(e) => updateExercise(ex.k, { notes: e.target.value })}
+              rows={2}
+            />
+          ) : (
+            <button className="exercise-note-toggle" onClick={() => updateExercise(ex.k, { notesOpen: true })}>
+              + Note for this exercise
+            </button>
+          )}
 
           {ex.collapsed ? (
             <button className="exercise-summary" onClick={() => toggleCollapsed(ex.k)}>
@@ -376,6 +411,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 </span>
               )}
             </div>
+            <div className="chip-stack">
               {targetReps ? (
                 <button className="target-chip" onClick={() => {
                   const v = window.prompt('Target reps for this exercise', String(targetReps))
@@ -400,14 +436,20 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   + Set target
                 </button>
               )}
+              {!sidesActive && (
+                <button className="target-chip target-chip-empty" onClick={() => enableTrackSides(ex.name)}>
+                  + Track sides
+                </button>
+              )}
             </div>
+          </div>
           )}
 
           {ex.sets.map((s, i) => {
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
             return (
               <div key={s.k}>
-                <div className="set-row">
+                <div className={`set-row ${sidesActive ? 'set-row-sides' : ''}`}>
                   <span className="set-index">{i + 1}</span>
                   <input
                     className="input"
@@ -445,15 +487,18 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     value={s.reps}
                     onChange={(e) => updateSet(ex.k, s.k, { reps: e.target.value })}
                   />
-                  <button
-                    className={`mini-btn side-btn ${s.side ? 'on' : ''} ${s.side === 'L' ? 'side-l' : ''} ${s.side === 'R' ? 'side-r' : ''}`}
-                    onClick={() => updateSet(ex.k, s.k, { side: s.side === null ? 'L' : s.side === 'L' ? 'R' : null })}
-                    title="Which side — tap to cycle: unset → L → R"
-                  >
-                    {s.side || '—'}
-                  </button>
+                  {sidesActive && (
+                    <button
+                      className={`mini-btn side-btn ${s.side ? 'on' : ''} ${s.side === 'L' ? 'side-l' : ''} ${s.side === 'R' ? 'side-r' : ''}`}
+                      onClick={() => updateSet(ex.k, s.k, { side: s.side === null ? 'L' : s.side === 'L' ? 'R' : null })}
+                      title="Which side — tap to cycle: L / R"
+                    >
+                      {s.side || 'L/R'}
+                    </button>
+                  )}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>–</button>
                 </div>
+                <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
                   {customFeel ? (
                     <span className="feel-note">
