@@ -86,14 +86,24 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   async function enableTrackSides(exerciseName) {
     const key = exerciseName.trim().toLowerCase()
     setTargets((t) => ({ ...t, [key]: { ...t[key], trackSides: true } }))
-    // Seed set 1 with 'L' so the button never shows an ambiguous unset
-    // state once tracking is on for this exercise.
+    // Seed every set already in this exercise with an alternating L/R,
+    // not just the first one - otherwise turning this on after sets 2+
+    // already exist (e.g. pulled in from history) leaves them stuck on
+    // the ambiguous unset "L/R" state until manually tapped.
     setExercises((list) =>
-      list.map((ex) =>
-        ex.name.trim().toLowerCase() === key
-          ? { ...ex, sets: ex.sets.map((s, i) => (i === 0 && !s.side ? { ...s, side: 'L' } : s)) }
-          : ex
-      )
+      list.map((ex) => {
+        if (ex.name.trim().toLowerCase() !== key) return ex
+        let side = 'L'
+        return {
+          ...ex,
+          sets: ex.sets.map((s) => {
+            if (s.side) { side = s.side === 'L' ? 'R' : 'L'; return s }
+            const seeded = { ...s, side }
+            side = side === 'L' ? 'R' : 'L'
+            return seeded
+          }),
+        }
+      })
     )
     try {
       await setTrackSides(user.id, exerciseName.trim(), true)
@@ -363,6 +373,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               value={ex.notes}
               onChange={(e) => updateExercise(ex.k, { notes: e.target.value })}
               rows={2}
+              name={`exercise-note-${ex.k}`}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
             />
           ) : (
             <button className="exercise-note-toggle" onClick={() => updateExercise(ex.k, { notesOpen: true })}>
@@ -436,11 +451,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   + Set target
                 </button>
               )}
-              {!sidesActive && (
-                <button className="target-chip target-chip-empty" onClick={() => enableTrackSides(ex.name)}>
-                  + Track sides
-                </button>
-              )}
             </div>
           </div>
           )}
@@ -449,7 +459,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
             return (
               <div key={s.k}>
-                <div className={`set-row ${sidesActive ? 'set-row-sides' : ''}`}>
+                <div className="set-row">
                   <span className="set-index">{i + 1}</span>
                   <input
                     className="input"
@@ -487,7 +497,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     value={s.reps}
                     onChange={(e) => updateSet(ex.k, s.k, { reps: e.target.value })}
                   />
-                  {sidesActive && (
+                  {sidesActive ? (
                     <button
                       className={`mini-btn side-btn ${s.side ? 'on' : ''} ${s.side === 'L' ? 'side-l' : ''} ${s.side === 'R' ? 'side-r' : ''}`}
                       onClick={() => updateSet(ex.k, s.k, { side: s.side === null ? 'L' : s.side === 'L' ? 'R' : null })}
@@ -495,6 +505,16 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     >
                       {s.side || 'L/R'}
                     </button>
+                  ) : i === 0 ? (
+                    <button
+                      className="mini-btn side-btn-enable"
+                      onClick={() => enableTrackSides(ex.name)}
+                      title="Track left and right separately for this exercise"
+                    >
+                      + Side
+                    </button>
+                  ) : (
+                    <span className="side-slot-spacer" aria-hidden="true" />
                   )}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>–</button>
                 </div>
@@ -539,6 +559,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           placeholder="Cardio, aches, anything worth remembering"
           value={notes}
           onChange={(e) => { touch(); setNotes(e.target.value) }}
+          name="session-notes"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
         />
       </div>
 
