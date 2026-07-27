@@ -22,6 +22,12 @@ function durationMinutes(workout) {
   return Math.round(ms / 60000)
 }
 
+// A single rest that ran this long almost certainly wasn't actual rest -
+// got distracted, answered a call, etc. Excluded entirely from the sum
+// (not counted as rest, not counted toward the planned total either)
+// rather than trying to guess how much of it "really" was resting.
+const REST_ANOMALY_CUTOFF_SECONDS = 15 * 60
+
 // Sum of actual rest-timer durations across every set that had one
 // running, vs. what those timers were actually set to - the gap between
 // the two is genuine "extra" time beyond planned rest, not a guess.
@@ -32,6 +38,7 @@ function restBreakdown(workout) {
   for (const ex of workout.exercises) {
     for (const set of ex.sets) {
       if (set.rest_actual_seconds == null) continue
+      if (set.rest_actual_seconds > REST_ANOMALY_CUTOFF_SECONDS) continue
       any = true
       actual += set.rest_actual_seconds
       target += set.rest_target_seconds ?? 0

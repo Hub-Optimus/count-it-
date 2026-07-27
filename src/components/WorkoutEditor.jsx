@@ -118,6 +118,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // existing workout, fresh for a genuinely new one. This is the true
   // wall-clock session start, independent of when any set gets logged.
   const [startedAt] = useState(() => workout?.started_at ?? new Date().toISOString())
+  // Editable total-duration override, in minutes - lets him correct a
+  // session where he forgot to hit Finish on time. Only meaningful for
+  // an already-saved workout that has real started_at/finished_at; a
+  // brand-new in-progress session doesn't have a "duration" yet.
+  const [durationOverride, setDurationOverride] = useState(() => {
+    if (!workout?.started_at || !workout?.finished_at) return null
+    const mins = Math.round((new Date(workout.finished_at) - new Date(workout.started_at)) / 60000)
+    return Number.isFinite(mins) && mins >= 0 ? mins : null
+  })
   // Rest timer: { startedAt (ms, Date.now()), targetSeconds, exK, setK }.
   // Global to the whole session (not per-exercise) - starting any new
   // set anywhere finalizes whatever was running and starts the next one.
@@ -162,6 +171,12 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   function startRestFollowing(exK, setK) {
+    // Rest timers are a "this is happening right now" concept. Editing
+    // an already-saved workout (fixing a number, adding a forgotten set
+    // days later) is data correction, not a live session - nothing
+    // should ever start counting down in that case, no matter how the
+    // completion-detection below reads the data.
+    if (workout) return
     if (rest) finalizeRest()
     setRest({ startedAt: Date.now(), targetSeconds: DEFAULT_REST_SECONDS, exK, setK })
   }
@@ -454,7 +469,13 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
     setSaving(true)
     try {
-      const finishedAt = new Date().toISOString()
+      // If he corrected the duration for an already-saved workout, honor
+      // that directly rather than using the real "now" - startedAt stays
+      // fixed, finishedAt is derived to match the edited total.
+      const finishedAt =
+        workout && durationOverride !== '' && durationOverride != null
+          ? new Date(new Date(startedAt).getTime() + durationOverride * 60000).toISOString()
+          : new Date().toISOString()
       const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload, startedAt, finishedAt }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
@@ -505,6 +526,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         <label className="label" htmlFor="w-date">Date</label>
         <input id="w-date" className="input" type="date" value={date} onChange={(e) => { touch(); setDate(e.target.value) }} />
       </div>
+
+      {workout && durationOverride != null && (
+        <div className="field">
+          <label className="label" htmlFor="w-duration">Duration (minutes)</label>
+          <input
+            id="w-duration"
+            className="input"
+            type="number"
+            min="0"
+            inputMode="numeric"
+            value={durationOverride}
+            onChange={(e) => {
+              touch()
+              const v = e.target.value
+              setDurationOverride(v === '' ? '' : Math.max(0, parseInt(v, 10) || 0))
+            }}
+          />
+          <div className="field-hint">Forgot to hit Finish on time? Correct it here.</div>
+        </div>
+      )}
 
       {!workout && workouts.length > 0 && (
         <button className="btn btn-block" onClick={copyPreviousSession}>
