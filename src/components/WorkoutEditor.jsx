@@ -374,7 +374,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const avgReps = ex.name.trim() ? averageRepsEver(workouts, ex.name, workout?.id) : null
         const avgWeight = ex.name.trim() ? averageWeightEver(workouts, ex.name, workout?.id) : null
         const targetInfo = targets[ex.name.trim().toLowerCase()] || null
-        const sidesActive = Boolean(targetInfo?.trackSides) || ex.sets.some((s) => s.side)
+        // Sides tracking is only ever on because the user deliberately
+        // turned it on for this exercise (persisted trackSides flag) -
+        // never inferred from a stray leftover `side` value carried in
+        // from an old historical set. That fallback used to exist as a
+        // safety net for a failed/stale fetch, but it meant testing the
+        // feature once on an exercise made it silently reappear "on" in
+        // every future session for that exercise, unasked.
+        const sidesActive = Boolean(targetInfo?.trackSides)
         const targetReps = targetInfo?.reps || null
         const targetWeightRef = lastSession?.sets?.length
           ? lastSession.sets.reduce((max, s) => (s.weight != null && (!max || toKg(s.weight, s.unit) > toKg(max.weight, max.unit)) ? s : max), null)
