@@ -117,16 +117,25 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // Captured once per editor mount - preserved across edits of an
   // existing workout, fresh for a genuinely new one. This is the true
   // wall-clock session start, independent of when any set gets logged.
-  const [startedAt] = useState(() => workout?.started_at ?? new Date().toISOString())
-  // Editable total-duration override, in minutes - lets him correct a
-  // session where he forgot to hit Finish on time. Only meaningful for
-  // an already-saved workout that has real started_at/finished_at; a
-  // brand-new in-progress session doesn't have a "duration" yet.
-  const [durationOverride, setDurationOverride] = useState(() => {
-    if (!workout?.started_at || !workout?.finished_at) return null
-    const mins = Math.round((new Date(workout.finished_at) - new Date(workout.started_at)) / 60000)
-    return Number.isFinite(mins) && mins >= 0 ? mins : null
+  // For a genuinely new session, this is the real moment it began -
+  // simple, exactly one clock, starts now and ends at Finish. For an
+  // existing workout, only use its real recorded value - never invent
+  // a fresh "right now" timestamp just because the workout is being
+  // opened, or every old workout would falsely look like it took ~0
+  // minutes the instant you edited anything else on it.
+  const [startedAt] = useState(() => (workout ? (workout.started_at ?? null) : new Date().toISOString()))
+  // Workout Duration, edited as a simple hour:minute clock picker rather
+  // than a bare number - "1:30" reads instantly, "90" makes you do math.
+  // Only ever shown for an already-saved workout being reopened.
+  const [durationHHMM, setDurationHHMM] = useState(() => {
+    if (!workout?.started_at || !workout?.finished_at) return '00:00'
+    const mins = Math.max(0, Math.round((new Date(workout.finished_at) - new Date(workout.started_at)) / 60000))
+    return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
   })
+  // Tracks whether he actually touched the picker this session - if he
+  // didn't, the original finished_at is preserved exactly as-is rather
+  // than being recomputed from an untouched default value.
+  const [durationTouched, setDurationTouched] = useState(false)
   // Rest timer: { startedAt (ms, Date.now()), targetSeconds, exK, setK }.
   // Global to the whole session (not per-exercise) - starting any new
   // set anywhere finalizes whatever was running and starts the next one.
@@ -469,14 +478,28 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
     setSaving(true)
     try {
-      // If he corrected the duration for an already-saved workout, honor
-      // that directly rather than using the real "now" - startedAt stays
-      // fixed, finishedAt is derived to match the edited total.
-      const finishedAt =
-        workout && durationOverride !== '' && durationOverride != null
-          ? new Date(new Date(startedAt).getTime() + durationOverride * 60000).toISOString()
-          : new Date().toISOString()
-      const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload, startedAt, finishedAt }
+      // Three cases: (1) a genuinely new session - simple, real "now" at
+      // Finish, exactly one clock start-to-end. (2) an existing workout
+      // where he touched the duration picker - honor that number
+      // directly, anchored to its real started_at if it has one, or to
+      // midnight of its date if it never had timing data at all (never
+      // pair a fabricated "now" with a real old date). (3) an existing
+      // workout he didn't touch the duration on - preserve its original
+      // timing exactly, untouched, no matter what else he edited.
+      let startedAtToSave = startedAt
+      let finishedAtToSave
+      if (!workout) {
+        finishedAtToSave = new Date().toISOString()
+      } else if (durationTouched) {
+        const [hh, mm] = durationHHMM.split(':').map(Number)
+        const durationMs = ((hh || 0) * 60 + (mm || 0)) * 60000
+        const anchorMs = startedAt ? new Date(startedAt).getTime() : new Date(`${date}T00:00:00`).getTime()
+        if (!startedAt) startedAtToSave = new Date(anchorMs).toISOString()
+        finishedAtToSave = new Date(anchorMs + durationMs).toISOString()
+      } else {
+        finishedAtToSave = workout.finished_at ?? null
+      }
+      const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload, startedAt: startedAtToSave, finishedAt: finishedAtToSave }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
       if (rest) setRest(null)
@@ -527,21 +550,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         <input id="w-date" className="input" type="date" value={date} onChange={(e) => { touch(); setDate(e.target.value) }} />
       </div>
 
-      {workout && durationOverride != null && (
+      {workout && (
         <div className="field">
-          <label className="label" htmlFor="w-duration">Duration (minutes)</label>
+          <label className="label" htmlFor="w-duration">Workout Duration</label>
           <input
             id="w-duration"
             className="input"
-            type="number"
-            min="0"
-            inputMode="numeric"
-            value={durationOverride}
-            onChange={(e) => {
-              touch()
-              const v = e.target.value
-              setDurationOverride(v === '' ? '' : Math.max(0, parseInt(v, 10) || 0))
-            }}
+            type="time"
+            value={durationHHMM}
+            onChange={(e) => { touch(); setDurationTouched(true); setDurationHHMM(e.target.value) }}
           />
           <div className="field-hint">Forgot to hit Finish on time? Correct it here.</div>
         </div>
