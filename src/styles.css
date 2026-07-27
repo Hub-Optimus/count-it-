@@ -363,6 +363,21 @@ button { cursor: pointer; }
 
 .input::placeholder, .textarea::placeholder { color: var(--ink-faint); }
 
+/* Browser autofill can silently paint its own light background/text
+   over any input or textarea, regardless of our styles above - this
+   is what caused the exercise-note field to look like a plain white
+   box until tapped. Neutralize it everywhere, not just on the one
+   field that showed it, so the whole class of bug can't resurface. */
+.input:-webkit-autofill,
+.textarea:-webkit-autofill,
+.input:-webkit-autofill:focus,
+.textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-deep) inset;
+  box-shadow: 0 0 0 1000px var(--bg-deep) inset;
+  caret-color: var(--ink);
+}
+
 input[type='date'].input { color-scheme: dark; }
 
 /* ---------- exercise blocks in the editor ---------- */
@@ -497,6 +512,16 @@ input[type='date'].input { color-scheme: dark; }
 
 .side-btn.side-l { color: var(--blue); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
 .side-btn.side-r { color: var(--yellow); border-color: var(--yellow); background: color-mix(in srgb, var(--yellow) 14%, transparent); }
+
+.side-btn-enable {
+  color: var(--ink-faint);
+  border-style: dashed;
+  background: transparent;
+  font-size: 10.5px;
+  padding: 0 2px;
+}
+
+.side-slot-spacer { display: block; }
 
 .browse-btn {
   flex: none;
