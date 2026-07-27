@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 export async function fetchWorkouts() {
   const { data, error } = await supabase
     .from('workouts')
-    .select('id, date, split, notes, exercises(id, name, notes, position, sets(id, weight, unit, reps, per_side, side, feel, position))')
+    .select('id, date, split, notes, started_at, finished_at, exercises(id, name, notes, position, sets(id, weight, unit, reps, per_side, side, feel, position, rest_target_seconds, rest_actual_seconds))')
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -38,6 +38,8 @@ export async function insertChildren(userId, workoutId, exercises) {
       per_side: Boolean(set.perSide),
       side: set.side || null,
       feel: set.feel || null,
+      rest_target_seconds: set.restTarget ?? null,
+      rest_actual_seconds: set.restActual ?? null,
       position: j,
     }))
   )
@@ -47,10 +49,10 @@ export async function insertChildren(userId, workoutId, exercises) {
   }
 }
 
-export async function insertFullWorkout(userId, { date, split, notes, exercises }) {
+export async function insertFullWorkout(userId, { date, split, notes, exercises, startedAt, finishedAt }) {
   const { data, error } = await supabase
     .from('workouts')
-    .insert({ user_id: userId, date, split, notes: notes || null })
+    .insert({ user_id: userId, date, split, notes: notes || null, started_at: startedAt || null, finished_at: finishedAt || null })
     .select('id')
     .single()
   if (error) throw error
@@ -58,10 +60,10 @@ export async function insertFullWorkout(userId, { date, split, notes, exercises 
   return data.id
 }
 
-export async function updateFullWorkout(userId, workoutId, { date, split, notes, exercises }) {
+export async function updateFullWorkout(userId, workoutId, { date, split, notes, exercises, startedAt, finishedAt }) {
   const { error } = await supabase
     .from('workouts')
-    .update({ date, split, notes: notes || null })
+    .update({ date, split, notes: notes || null, started_at: startedAt || null, finished_at: finishedAt || null })
     .eq('id', workoutId)
   if (error) throw error
   // Replace children wholesale (sets cascade-delete with their exercises)
@@ -87,11 +89,14 @@ export async function mergeWorkouts(userId, keepWorkout, mergeFromWorkout) {
       notes: ex.notes,
       sets: ex.sets.map((s) => ({
         weight: s.weight, unit: s.unit, reps: s.reps, perSide: s.per_side, side: s.side, feel: s.feel,
+        restTarget: s.rest_target_seconds, restActual: s.rest_actual_seconds,
       })),
     }))
   const combinedExercises = [...toPlainExercises(keepWorkout), ...toPlainExercises(mergeFromWorkout)]
   const combinedNotes = [keepWorkout.notes, mergeFromWorkout.notes].filter(Boolean).join(' | ') || null
   await updateFullWorkout(userId, keepWorkout.id, {
+    startedAt: keepWorkout.started_at || mergeFromWorkout.started_at || null,
+    finishedAt: keepWorkout.finished_at || mergeFromWorkout.finished_at || null,
     date: keepWorkout.date,
     split: keepWorkout.split || mergeFromWorkout.split || null,
     notes: combinedNotes,
