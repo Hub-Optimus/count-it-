@@ -1,4 +1,4 @@
-import { toKg } from './format'
+import { toKg, volumeMultiplier } from './format'
 
 const e1rm = (weightKg, reps) => {
   const r = Math.min(reps || 0, 12)
@@ -13,7 +13,7 @@ function volumeAndBestE1rm(workout) {
     for (const s of ex.sets) {
       if (s.weight == null || !s.reps) continue
       const kg = toKg(Number(s.weight), s.unit)
-      const mult = s.per_side ? 2 : 1
+      const mult = volumeMultiplier(s)
       volume += kg * s.reps * mult
       const est = e1rm(kg, s.reps)
       if (est > best) best = est

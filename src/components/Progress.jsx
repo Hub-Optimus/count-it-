@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { toKg, KG_PER_LB, fmtWeight, fmtVolume, fmtDate } from '../lib/format'
+import { toKg, KG_PER_LB, fmtWeight, fmtVolume, fmtDate, volumeMultiplier } from '../lib/format'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { fetchExerciseTargets } from '../lib/db'
@@ -22,7 +22,7 @@ function buildStats(workouts) {
         const kg = toKg(Number(s.weight), s.unit)
         if (s.unit === 'lbs') sawLbs = true
         else sawKg = true
-        volKg += kg * (s.reps || 0) * (s.per_side ? 2 : 1)
+        volKg += kg * (s.reps || 0) * volumeMultiplier(s)
         if (bestKg === null || kg > bestKg) {
           bestKg = kg
           bestSet = s

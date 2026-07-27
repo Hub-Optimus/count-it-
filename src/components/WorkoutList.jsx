@@ -1,4 +1,4 @@
-import { toKg, fmtVolume } from '../lib/format'
+import { toKg, fmtVolume, volumeMultiplier } from '../lib/format'
 import { groupFor } from '../lib/exerciseLibrary'
 import { Tally } from './TabBar'
 
@@ -7,7 +7,7 @@ function volumeKg(workout) {
   for (const ex of workout.exercises) {
     for (const set of ex.sets) {
       if (set.weight == null || !set.reps) continue
-      total += toKg(Number(set.weight), set.unit) * set.reps * (set.per_side ? 2 : 1)
+      total += toKg(Number(set.weight), set.unit) * set.reps * volumeMultiplier(set)
     }
   }
   return total

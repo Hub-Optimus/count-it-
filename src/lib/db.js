@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 export async function fetchWorkouts() {
   const { data, error } = await supabase
     .from('workouts')
-    .select('id, date, split, notes, exercises(id, name, position, sets(id, weight, unit, reps, per_side, feel, position))')
+    .select('id, date, split, notes, exercises(id, name, notes, position, sets(id, weight, unit, reps, per_side, side, feel, position))')
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -19,11 +19,11 @@ export async function fetchWorkouts() {
   }))
 }
 
-// exercises: [{ name, sets: [{ weight, unit, reps, feel, perSide }] }]
+// exercises: [{ name, notes, sets: [{ weight, unit, reps, feel, perSide, side }] }]
 export async function insertChildren(userId, workoutId, exercises) {
   const { data: exRows, error: exErr } = await supabase
     .from('exercises')
-    .insert(exercises.map((ex, i) => ({ workout_id: workoutId, user_id: userId, name: ex.name, position: i })))
+    .insert(exercises.map((ex, i) => ({ workout_id: workoutId, user_id: userId, name: ex.name, notes: ex.notes || null, position: i })))
     .select('id, position')
   if (exErr) throw exErr
 
@@ -36,6 +36,7 @@ export async function insertChildren(userId, workoutId, exercises) {
       unit: set.unit || 'kg',
       reps: set.reps ?? null,
       per_side: Boolean(set.perSide),
+      side: set.side || null,
       feel: set.feel || null,
       position: j,
     }))
@@ -83,8 +84,9 @@ export async function mergeWorkouts(userId, keepWorkout, mergeFromWorkout) {
   const toPlainExercises = (w) =>
     w.exercises.map((ex) => ({
       name: ex.name,
+      notes: ex.notes,
       sets: ex.sets.map((s) => ({
-        weight: s.weight, unit: s.unit, reps: s.reps, perSide: s.per_side, feel: s.feel,
+        weight: s.weight, unit: s.unit, reps: s.reps, perSide: s.per_side, side: s.side, feel: s.feel,
       })),
     }))
   const combinedExercises = [...toPlainExercises(keepWorkout), ...toPlainExercises(mergeFromWorkout)]
@@ -154,7 +156,7 @@ export async function deleteBodyMetric(id) {
 export async function fetchExerciseTargets(userId) {
   const { data, error } = await supabase
     .from('exercise_targets')
-    .select('exercise_name, target_reps, seed_weight, seed_weight_unit')
+    .select('exercise_name, target_reps, seed_weight, seed_weight_unit, track_sides')
   if (error) throw error
   const map = {}
   for (const row of data ?? []) {
@@ -162,6 +164,7 @@ export async function fetchExerciseTargets(userId) {
       reps: row.target_reps,
       seedWeight: row.seed_weight,
       seedWeightUnit: row.seed_weight_unit,
+      trackSides: Boolean(row.track_sides),
     }
   }
   return map
@@ -174,5 +177,15 @@ export async function saveExerciseTarget(userId, exerciseName, targetReps, seedW
       user_id: userId, exercise_name: exerciseName, target_reps: targetReps,
       seed_weight: seedWeight, seed_weight_unit: seedWeightUnit, updated_at: new Date().toISOString(),
     })
+  if (error) throw error
+}
+
+// Partial upsert - only touches track_sides, leaves any existing rep
+// target/seed weight on this exercise untouched (same safe pattern as
+// saveHeight: Postgres upsert only SETs columns present in the payload).
+export async function setTrackSides(userId, exerciseName, trackSides) {
+  const { error } = await supabase
+    .from('exercise_targets')
+    .upsert({ user_id: userId, exercise_name: exerciseName, track_sides: trackSides, updated_at: new Date().toISOString() })
   if (error) throw error
 }

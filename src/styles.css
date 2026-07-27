@@ -305,6 +305,8 @@ button { cursor: pointer; }
 .feel-chip.f-heavy.on { background: var(--yellow); border-color: var(--yellow); color: #1a1405; }
 .feel-chip.f-vheavy.on { background: var(--red); border-color: var(--red); color: #1c0607; }
 
+.feel-num { font-size: 10px; font-weight: 700; margin-right: 3px; opacity: 0.75; }
+
 .feel-note {
   display: inline-flex;
   align-items: center;
@@ -363,6 +365,21 @@ button { cursor: pointer; }
 
 .input::placeholder, .textarea::placeholder { color: var(--ink-faint); }
 
+/* Browser autofill can silently paint its own light background/text
+   over any input or textarea, regardless of our styles above - this
+   is what caused the exercise-note field to look like a plain white
+   box until tapped. Neutralize it everywhere, not just on the one
+   field that showed it, so the whole class of bug can't resurface. */
+.input:-webkit-autofill,
+.textarea:-webkit-autofill,
+.input:-webkit-autofill:focus,
+.textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-deep) inset;
+  box-shadow: 0 0 0 1000px var(--bg-deep) inset;
+  caret-color: var(--ink);
+}
+
 input[type='date'].input { color-scheme: dark; }
 
 /* ---------- exercise blocks in the editor ---------- */
@@ -398,6 +415,19 @@ input[type='date'].input { color-scheme: dark; }
 }
 
 .exercise-head .input { font-weight: 700; }
+
+.exercise-note-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-faint);
+  font-size: 13px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
 
 .progress-notice {
   background: color-mix(in srgb, var(--yellow) 14%, transparent);
@@ -494,6 +524,11 @@ input[type='date'].input { color-scheme: dark; }
 }
 
 .mini-btn.on { color: var(--ink); border-color: var(--ink-faint); background: var(--bg-deep); }
+
+.side-btn.side-l { color: var(--blue); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.side-btn.side-r { color: var(--yellow); border-color: var(--yellow); background: color-mix(in srgb, var(--yellow) 14%, transparent); }
+
+.side-slot-spacer { display: block; }
 
 .browse-btn {
   flex: none;
