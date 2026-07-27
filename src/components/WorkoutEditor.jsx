@@ -100,8 +100,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       if (!localStorage.getItem(SIDES_INTRO_KEY)) {
         window.alert(
           'Track left & right separately for this exercise.\n\n' +
-          'Each set gets an L/R tag — tap it to cycle which side you did.\n\n' +
-          'Use "Stop tracking left/right" below the sets anytime to turn this back off.'
+          'Each set gets an L or R tag — tap it to switch sides.\n\n' +
+          'Tap the "Tracking left/right" chip again anytime to turn this back off.'
         )
         localStorage.setItem(SIDES_INTRO_KEY, '1')
       }
@@ -496,6 +496,12 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   + Set target
                 </button>
               )}
+              <button
+                className={`target-chip ${sidesActive ? '' : 'target-chip-empty'}`}
+                onClick={() => (sidesActive ? disableTrackSides(ex.name) : maybeExplainThenEnableSides(ex.name))}
+              >
+                {sidesActive ? '✓ Tracking left/right' : 'Track left/right'}
+              </button>
             </div>
           </div>
           )}
@@ -544,24 +550,16 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   />
                   {sidesActive ? (
                     <button
-                      className={`mini-btn side-btn ${s.side ? 'on' : ''} ${s.side === 'L' ? 'side-l' : ''} ${s.side === 'R' ? 'side-r' : ''}`}
-                      onClick={() => updateSet(ex.k, s.k, { side: s.side === null ? 'L' : s.side === 'L' ? 'R' : null })}
-                      title="Which side — tap to cycle: L / R"
+                      className={`mini-btn side-btn on ${s.side === 'R' ? 'side-r' : 'side-l'}`}
+                      onClick={() => updateSet(ex.k, s.k, { side: s.side === 'R' ? 'L' : 'R' })}
+                      aria-label={`Side: ${s.side === 'R' ? 'right' : 'left'} — tap to switch`}
                     >
-                      {s.side || 'L/R'}
-                    </button>
-                  ) : i === 0 ? (
-                    <button
-                      className="mini-btn side-btn-enable"
-                      onClick={() => maybeExplainThenEnableSides(ex.name)}
-                      title="Track left and right separately for this exercise"
-                    >
-                      + Side
+                      {s.side === 'R' ? 'R' : 'L'}
                     </button>
                   ) : (
                     <span className="side-slot-spacer" aria-hidden="true" />
                   )}
-                  <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>–</button>
+                  <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>✕</button>
                 </div>
                 <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
@@ -589,11 +587,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           })}
 
           <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
-          {sidesActive && (
-            <button className="side-off-link" onClick={() => disableTrackSides(ex.name)}>
-              Stop tracking left/right for this exercise
-            </button>
-          )}
           </>
           )}
         </div>
