@@ -13,6 +13,34 @@ function volumeKg(workout) {
   return total
 }
 
+// Total wall-clock session length - null for older workouts logged
+// before this was tracked, so callers must handle the absent case.
+function durationMinutes(workout) {
+  if (!workout.started_at || !workout.finished_at) return null
+  const ms = new Date(workout.finished_at) - new Date(workout.started_at)
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  return Math.round(ms / 60000)
+}
+
+// Sum of actual rest-timer durations across every set that had one
+// running, vs. what those timers were actually set to - the gap between
+// the two is genuine "extra" time beyond planned rest, not a guess.
+function restBreakdown(workout) {
+  let actual = 0
+  let target = 0
+  let any = false
+  for (const ex of workout.exercises) {
+    for (const set of ex.sets) {
+      if (set.rest_actual_seconds == null) continue
+      any = true
+      actual += set.rest_actual_seconds
+      target += set.rest_target_seconds ?? 0
+    }
+  }
+  if (!any) return null
+  return { actualMinutes: Math.round(actual / 60), targetMinutes: Math.round(target / 60) }
+}
+
 // First-appearance-ordered, deduped muscle groups actually trained in this session.
 function musclesFor(workout) {
   const seen = []
@@ -42,6 +70,8 @@ export default function WorkoutList({ workouts, onOpen }) {
         const vol = volumeKg(w)
         const muscles = musclesFor(w)
         const heading = w.split || (muscles.length ? muscles.join(' + ') : 'Workout')
+        const mins = durationMinutes(w)
+        const rest = restBreakdown(w)
         return (
           <button key={w.id} className="workout-card" onClick={() => onOpen(w)}>
             <span className="wc-date">
@@ -51,8 +81,13 @@ export default function WorkoutList({ workouts, onOpen }) {
             <span>
               <span className="wc-split">{heading}</span>
               <div className="wc-meta">
-                {w.exercises.length} exercises · {setCount} sets{vol > 0 ? ` · ${fmtVolume(vol)}` : ''}
+                {w.exercises.length} exercises · {setCount} sets{vol > 0 ? ` · ${fmtVolume(vol)}` : ''}{mins != null ? ` · ${mins} min` : ''}
               </div>
+              {rest && (
+                <div className="wc-notes">
+                  {rest.actualMinutes} min resting{rest.targetMinutes > 0 ? ` (planned ${rest.targetMinutes})` : ''}
+                </div>
+              )}
               {w.split && muscles.length > 0 && <div className="wc-notes">{muscles.join(' + ')}</div>}
               {w.notes && <div className="wc-notes">{w.notes}</div>}
             </span>

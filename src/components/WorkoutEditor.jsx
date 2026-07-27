@@ -7,6 +7,35 @@ import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
+// Synthesized tone instead of a bundled audio file - avoids adding a new
+// asset to his manual GitHub-upload workflow, and works the moment the
+// tab is in the foreground with no extra permissions needed. Best-effort
+// only: silently no-ops if the Web Audio API isn't available.
+function playRestBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.frequency.value = 880
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    gain.gain.setValueAtTime(0.2, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.35)
+  } catch { /* audio unavailable - the visual countdown still works fine */ }
+}
+
+function formatMMSS(totalSeconds) {
+  const sign = totalSeconds < 0 ? '-' : ''
+  const abs = Math.abs(totalSeconds)
+  const m = Math.floor(abs / 60)
+  const s = abs % 60
+  return `${sign}${m}:${String(s).padStart(2, '0')}`
+}
+
 const FEELS = [
   { value: 'easy', cls: 'f-easy', emoji: '😊', num: '1' },
   { value: 'ok', cls: 'f-ok', emoji: '🙂', num: '2' },
@@ -20,13 +49,17 @@ const FEEL_VALUES = FEELS.map((f) => f.value)
 // explanation, so this fills that gap without adding permanent clutter.
 const SIDES_INTRO_KEY = 'countit_sides_intro_seen_v1'
 
+// Fixed default per Strong/Hevy's usual starting point - adjustable live
+// via +/-15s on the timer itself, no per-exercise custom default for v1.
+const DEFAULT_REST_SECONDS = 90
+
 let seq = 0
 const nextKey = () => `k${++seq}`
 
 // Sets pre-filled from history behave exactly like any other set - no
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '' })
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', restTarget: null, restActual: null })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false })
 
 function historySet(histSet) {
@@ -38,6 +71,10 @@ function historySet(histSet) {
     perSide: Boolean(histSet.per_side),
     side: histSet.side || null,
     feel: '',
+    // A past session's rest period belongs to that session, not today's
+    // fresh set - always starts untracked regardless of what history says.
+    restTarget: null,
+    restActual: null,
   }
 }
 
@@ -56,6 +93,8 @@ function toModel(workout) {
       perSide: Boolean(s.per_side),
       side: s.side || null,
       feel: s.feel || '',
+      restTarget: s.rest_target_seconds ?? null,
+      restActual: s.rest_actual_seconds ?? null,
     })),
   }))
 }
@@ -75,6 +114,62 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // now." A random per-mount salt breaks that stale association.
   const sessionSalt = useMemo(() => Math.random().toString(36).slice(2, 8), [])
   const [date, setDate] = useState(workout?.date ?? todayISO())
+  // Captured once per editor mount - preserved across edits of an
+  // existing workout, fresh for a genuinely new one. This is the true
+  // wall-clock session start, independent of when any set gets logged.
+  const [startedAt] = useState(() => workout?.started_at ?? new Date().toISOString())
+  // Rest timer: { startedAt (ms, Date.now()), targetSeconds, exK, setK }.
+  // Global to the whole session (not per-exercise) - starting any new
+  // set anywhere finalizes whatever was running and starts the next one.
+  const [rest, setRest] = useState(null)
+  const [, forceTick] = useState(0)
+  const playedDoneSoundRef = useRef(false)
+
+  useEffect(() => {
+    if (!rest) return
+    const id = setInterval(() => forceTick((t) => t + 1), 500)
+    return () => clearInterval(id)
+  }, [rest])
+
+  useEffect(() => {
+    playedDoneSoundRef.current = false
+  }, [rest?.startedAt])
+
+  const restElapsedSeconds = rest ? Math.floor((Date.now() - rest.startedAt) / 1000) : 0
+  const restRemainingSeconds = rest ? rest.targetSeconds - restElapsedSeconds : 0
+
+  useEffect(() => {
+    if (rest && restRemainingSeconds <= 0 && !playedDoneSoundRef.current) {
+      playedDoneSoundRef.current = true
+      playRestBeep()
+      try { navigator.vibrate?.(200) } catch { /* not supported - visual countdown still works */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restRemainingSeconds > 0])
+
+  function finalizeRest() {
+    if (!rest) return
+    const actualSeconds = Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000))
+    const { exK, setK, targetSeconds } = rest
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.k === exK
+          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, restTarget: targetSeconds, restActual: actualSeconds } : s)) }
+          : ex
+      )
+    )
+    setRest(null)
+  }
+
+  function startRestFollowing(exK, setK) {
+    if (rest) finalizeRest()
+    setRest({ startedAt: Date.now(), targetSeconds: DEFAULT_REST_SECONDS, exK, setK })
+  }
+
+  function adjustRest(deltaSeconds) {
+    setRest((r) => (r ? { ...r, targetSeconds: Math.max(0, r.targetSeconds + deltaSeconds) } : r))
+  }
+
   const [notes, setNotes] = useState(workout?.notes ?? '')
   const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
   const [draft, setDraft] = useState(() => readDraft(target))
@@ -208,6 +303,16 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function updateSet(exK, setK, patch) {
     touch()
+    // Read from this render's current state (not the updater callback)
+    // to detect "just became fully filled in" reliably, without relying
+    // on setState-updater timing.
+    const curEx = exercises.find((e) => e.k === exK)
+    const curSet = curEx?.sets.find((s) => s.k === setK)
+    const wasComplete = Boolean(curSet && curSet.weight !== '' && curSet.reps !== '')
+    const nextWeight = patch.weight !== undefined ? patch.weight : curSet?.weight
+    const nextReps = patch.reps !== undefined ? patch.reps : curSet?.reps
+    const nowComplete = nextWeight !== '' && nextWeight != null && nextReps !== '' && nextReps != null
+
     setExercises((list) =>
       list.map((ex) =>
         ex.k === exK
@@ -215,12 +320,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           : ex
       )
     )
+
+    if (!wasComplete && nowComplete) startRestFollowing(exK, setK)
   }
 
   const oppositeSide = (s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null)
 
   function addSet(exK) {
     touch()
+    // Tapping "+ Set" is the real "I just finished that set" signal for
+    // any set that arrived pre-filled (copied from the last one, or from
+    // history) rather than hand-typed - those never pass through
+    // updateSet's blank-to-filled detection, so without this they'd
+    // never get timed at all. Only fires if nothing's already timing
+    // that set (avoids double-triggering when it WAS hand-typed and
+    // already started a timer of its own).
+    const curEx = exercises.find((e) => e.k === exK)
+    const curLast = curEx?.sets[curEx.sets.length - 1]
+    const curLastComplete = Boolean(curLast && curLast.weight !== '' && curLast.reps !== '')
+    const shouldStartRest = curLastComplete && !rest && curLast.restActual == null
+
     setExercises((list) =>
       list.map((ex) => {
         if (ex.k !== exK) return ex
@@ -232,7 +351,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           newSet = historySet(histNext)
         } else {
           newSet = last
-            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '' }
+            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '', restTarget: null, restActual: null }
             : blankSet(defaultUnit)
         }
         // Alternating takes priority over whatever history/copy suggested -
@@ -241,6 +360,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         return { ...ex, sets: [...ex.sets, newSet] }
       })
     )
+
+    if (shouldStartRest) startRestFollowing(exK, curLast.k)
   }
 
   function removeSet(exK, setK) {
@@ -296,6 +417,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   async function save() {
     setError('')
 
+    // If a rest timer is still running at Finish time, its actual
+    // elapsed duration needs to land in THIS payload directly - going
+    // through finalizeRest's setExercises first wouldn't be reflected
+    // in `exercises` until next render, which is too late for the
+    // payload we're about to build right now.
+    const pendingRest = rest
+      ? { exK: rest.exK, setK: rest.setK, restTarget: rest.targetSeconds, restActual: Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000)) }
+      : null
+
     const payload = exercises
       .map((ex) => ({
         name: ex.name.trim(),
@@ -305,6 +435,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           .map((s) => {
             const w = s.weight === '' ? null : parseFloat(s.weight)
             const r = s.reps === '' ? null : parseInt(s.reps, 10)
+            const isPending = pendingRest && ex.k === pendingRest.exK && s.k === pendingRest.setK
             return {
               weight: Number.isFinite(w) ? w : null,
               unit: s.unit,
@@ -312,6 +443,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               perSide: s.perSide,
               side: s.side || null,
               feel: s.feel.trim() || null,
+              restTarget: isPending ? pendingRest.restTarget : (s.restTarget ?? null),
+              restActual: isPending ? pendingRest.restActual : (s.restActual ?? null),
             }
           }),
       }))
@@ -321,9 +454,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
     setSaving(true)
     try {
-      const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload }
+      const finishedAt = new Date().toISOString()
+      const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload, startedAt, finishedAt }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
+      if (rest) setRest(null)
       clearDraft()
       onSaved()
     } catch (e) {
@@ -341,6 +476,20 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           {saving ? 'Finishing…' : 'Finish'}
         </button>
       </div>
+
+      {rest && (
+        <div className={`rest-bar ${restRemainingSeconds <= 0 ? 'rest-bar-done' : ''}`}>
+          <div className="rest-bar-time">
+            {restRemainingSeconds > 0 ? formatMMSS(restRemainingSeconds) : `+${formatMMSS(Math.abs(restRemainingSeconds))}`}
+          </div>
+          <div className="rest-bar-label">{restRemainingSeconds > 0 ? 'Resting' : 'Rest complete'}</div>
+          <div className="rest-bar-actions">
+            <button className="mini-btn" onClick={() => adjustRest(-15)} aria-label="15 seconds less">-15s</button>
+            <button className="mini-btn" onClick={() => adjustRest(15)} aria-label="15 seconds more">+15s</button>
+            <button className="btn rest-bar-skip" onClick={finalizeRest}>Skip</button>
+          </div>
+        </div>
+      )}
 
       {draft && (
         <div className="banner">
