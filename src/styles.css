@@ -305,6 +305,21 @@ button { cursor: pointer; }
 .feel-chip.f-heavy.on { background: var(--yellow); border-color: var(--yellow); color: #1a1405; }
 .feel-chip.f-vheavy.on { background: var(--red); border-color: var(--red); color: #1c0607; }
 
+.feel-num { font-size: 10px; font-weight: 700; margin-right: 3px; opacity: 0.75; }
+
+.side-off-link {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: transparent;
+  border: none;
+  color: var(--ink-faint);
+  font-size: 12px;
+  text-decoration: underline;
+  padding: 8px 0 2px;
+  margin: 0;
+}
+
 .feel-note {
   display: inline-flex;
   align-items: center;
@@ -514,10 +529,11 @@ input[type='date'].input { color-scheme: dark; }
 .side-btn.side-r { color: var(--yellow); border-color: var(--yellow); background: color-mix(in srgb, var(--yellow) 14%, transparent); }
 
 .side-btn-enable {
-  color: var(--ink-faint);
-  border-style: dashed;
-  background: transparent;
+  color: var(--yellow);
+  border-color: var(--yellow);
+  background: color-mix(in srgb, var(--yellow) 12%, transparent);
   font-size: 10.5px;
+  font-weight: 700;
   padding: 0 2px;
 }
 
