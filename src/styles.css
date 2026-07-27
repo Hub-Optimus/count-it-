@@ -416,6 +416,19 @@ input[type='date'].input { color-scheme: dark; }
 
 .exercise-head .input { font-weight: 700; }
 
+.exercise-note-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-faint);
+  font-size: 13px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
 .progress-notice {
   background: color-mix(in srgb, var(--yellow) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--yellow) 40%, transparent);
