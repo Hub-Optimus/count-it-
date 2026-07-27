@@ -36,6 +36,16 @@ function formatMMSS(totalSeconds) {
   return `${sign}${m}:${String(s).padStart(2, '0')}`
 }
 
+// For the live session clock - switches to h:mm:ss once past an hour,
+// mm:ss below that, so it never shows a redundant leading "0:".
+function formatSessionClock(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 const FEELS = [
   { value: 'easy', cls: 'f-easy', emoji: '😊', num: '1' },
   { value: 'ok', cls: 'f-ok', emoji: '🙂', num: '2' },
@@ -142,6 +152,17 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   const [rest, setRest] = useState(null)
   const [, forceTick] = useState(0)
   const playedDoneSoundRef = useRef(false)
+
+  // Live session clock - ticks continuously for the whole time a new
+  // session is open, independent of the rest timer. Never shown while
+  // editing an already-saved workout (nothing "live" is happening then).
+  useEffect(() => {
+    if (workout) return
+    const id = setInterval(() => forceTick((t) => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [workout])
+
+  const sessionElapsedSeconds = !workout ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000) : 0
 
   useEffect(() => {
     if (!rest) return
@@ -520,6 +541,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           {saving ? 'Finishing…' : 'Finish'}
         </button>
       </div>
+
+      {!workout && (
+        <div className="session-clock">
+          <span className="session-clock-dot" aria-hidden="true" />
+          <span className="session-clock-label">Workout time</span>
+          <span className="session-clock-time">{formatSessionClock(sessionElapsedSeconds)}</span>
+        </div>
+      )}
 
       {rest && (
         <div className={`rest-bar ${restRemainingSeconds <= 0 ? 'rest-bar-done' : ''}`}>

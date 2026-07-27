@@ -13,6 +13,15 @@ function volumeKg(workout) {
   return total
 }
 
+// "3h 30m" instead of "210 min" - and "45m" (not "0h 45m") under an hour.
+function formatDuration(totalMinutes) {
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
 // Total wall-clock session length - null for older workouts logged
 // before this was tracked, so callers must handle the absent case.
 function durationMinutes(workout) {
@@ -88,11 +97,12 @@ export default function WorkoutList({ workouts, onOpen }) {
             <span>
               <span className="wc-split">{heading}</span>
               <div className="wc-meta">
-                {w.exercises.length} exercises · {setCount} sets{vol > 0 ? ` · ${fmtVolume(vol)}` : ''}{mins != null ? ` · ${mins} min` : ''}
+                {w.exercises.length} exercises · {setCount} sets{vol > 0 ? ` · ${fmtVolume(vol)}` : ''}
               </div>
-              {rest && (
+              {mins != null && (
                 <div className="wc-notes">
-                  {rest.actualMinutes} min resting{rest.targetMinutes > 0 ? ` (planned ${rest.targetMinutes})` : ''}
+                  Duration: {formatDuration(mins)}
+                  {rest ? ` · Rest time: ${formatDuration(rest.actualMinutes)} · Active time: ${formatDuration(Math.max(0, mins - rest.actualMinutes))}` : ''}
                 </div>
               )}
               {w.split && muscles.length > 0 && <div className="wc-notes">{muscles.join(' + ')}</div>}
