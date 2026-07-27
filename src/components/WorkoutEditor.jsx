@@ -8,12 +8,17 @@ import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTar
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
 const FEELS = [
-  { value: 'easy', cls: 'f-easy' },
-  { value: 'ok', cls: 'f-ok' },
-  { value: 'heavy', cls: 'f-heavy' },
-  { value: 'very heavy', cls: 'f-vheavy' },
+  { value: 'easy', cls: 'f-easy', emoji: '😊', num: '1' },
+  { value: 'ok', cls: 'f-ok', emoji: '🙂', num: '2' },
+  { value: 'heavy', cls: 'f-heavy', emoji: '😓', num: '3' },
+  { value: 'very heavy', cls: 'f-vheavy', emoji: '🥵', num: '4' },
 ]
 const FEEL_VALUES = FEELS.map((f) => f.value)
+
+// Shown once, the very first time anyone taps "+ Side" anywhere in the
+// app - the button itself is just 2 letters with no room for an
+// explanation, so this fills that gap without adding permanent clutter.
+const SIDES_INTRO_KEY = 'countit_sides_intro_seen_v1'
 
 let seq = 0
 const nextKey = () => `k${++seq}`
@@ -62,6 +67,13 @@ function readDraft(target) {
 
 export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, onClose, onSaved }) {
   const target = workout?.id ?? 'new'
+  // The k1/k2/... exercise keys are the same on every single page load
+  // (the counter restarts each time), so a name built only from them is
+  // identical every visit - if a browser or password-manager extension
+  // ever tagged that exact name once, it keeps reapplying that treatment
+  // forever since the name never changes to signal "this is different
+  // now." A random per-mount salt breaks that stale association.
+  const sessionSalt = useMemo(() => Math.random().toString(36).slice(2, 8), [])
   const [date, setDate] = useState(workout?.date ?? todayISO())
   const [notes, setNotes] = useState(workout?.notes ?? '')
   const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
@@ -81,6 +93,20 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     try {
       await saveExerciseTarget(user.id, exerciseName.trim(), reps, seedWeight, seedWeightUnit)
     } catch { /* best effort - local state already updated */ }
+  }
+
+  function maybeExplainThenEnableSides(exerciseName) {
+    try {
+      if (!localStorage.getItem(SIDES_INTRO_KEY)) {
+        window.alert(
+          'Track left & right separately for this exercise.\n\n' +
+          'Each set gets an L/R tag — tap it to cycle which side you did.\n\n' +
+          'Use "Stop tracking left/right" below the sets anytime to turn this back off.'
+        )
+        localStorage.setItem(SIDES_INTRO_KEY, '1')
+      }
+    } catch { /* localStorage unavailable - skip the one-time explainer, not critical */ }
+    enableTrackSides(exerciseName)
   }
 
   async function enableTrackSides(exerciseName) {
@@ -107,6 +133,25 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     )
     try {
       await setTrackSides(user.id, exerciseName.trim(), true)
+    } catch { /* best effort - local state already updated */ }
+  }
+
+  async function disableTrackSides(exerciseName) {
+    const key = exerciseName.trim().toLowerCase()
+    setTargets((t) => ({ ...t, [key]: { ...t[key], trackSides: false } }))
+    // sidesActive also turns on from any set already carrying a side
+    // value, so switching the flag off alone wouldn't visibly do
+    // anything until those are cleared too.
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.name.trim().toLowerCase() === key
+          ? { ...ex, sets: ex.sets.map((s) => ({ ...s, side: null })) }
+          : ex
+      )
+    )
+    touch()
+    try {
+      await setTrackSides(user.id, exerciseName.trim(), false)
     } catch { /* best effort - local state already updated */ }
   }
   const dirtyRef = useRef(false)
@@ -373,7 +418,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               value={ex.notes}
               onChange={(e) => updateExercise(ex.k, { notes: e.target.value })}
               rows={2}
-              name={`exercise-note-${ex.k}`}
+              name={`exercise-note-${sessionSalt}-${ex.k}`}
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"
@@ -508,7 +553,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   ) : i === 0 ? (
                     <button
                       className="mini-btn side-btn-enable"
-                      onClick={() => enableTrackSides(ex.name)}
+                      onClick={() => maybeExplainThenEnableSides(ex.name)}
                       title="Track left and right separately for this exercise"
                     >
                       + Side
@@ -531,8 +576,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                         key={f.value}
                         className={`chip feel-chip ${f.cls} ${s.feel === f.value ? 'on' : ''}`}
                         onClick={() => updateSet(ex.k, s.k, { feel: s.feel === f.value ? '' : f.value })}
+                        aria-label={f.value}
+                        title={f.value}
                       >
-                        {f.value}
+                        <span className="feel-num">{f.num}</span>{f.emoji}
                       </button>
                     ))
                   )}
@@ -542,6 +589,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           })}
 
           <button className="btn btn-block" onClick={() => addSet(ex.k)}>+ Set</button>
+          {sidesActive && (
+            <button className="side-off-link" onClick={() => disableTrackSides(ex.name)}>
+              Stop tracking left/right for this exercise
+            </button>
+          )}
           </>
           )}
         </div>
@@ -552,14 +604,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       <button className="btn btn-block" onClick={addExercise}>+ Exercise</button>
 
       <div className="field" style={{ marginTop: 14 }}>
-        <label className="label" htmlFor="w-notes">Session notes</label>
+        <label className="label" htmlFor="w-notes">Overall Session notes</label>
         <textarea
           id="w-notes"
           className="textarea"
           placeholder="Cardio, aches, anything worth remembering"
           value={notes}
           onChange={(e) => { touch(); setNotes(e.target.value) }}
-          name="session-notes"
+          name={`session-notes-${sessionSalt}`}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
