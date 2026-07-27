@@ -201,12 +201,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   function startRestFollowing(exK, setK) {
-    // Rest timers are a "this is happening right now" concept. Editing
-    // an already-saved workout (fixing a number, adding a forgotten set
-    // days later) is data correction, not a live session - nothing
-    // should ever start counting down in that case, no matter how the
-    // completion-detection below reads the data.
-    if (workout) return
+    // The "is this genuinely new" check now lives in each caller
+    // (updateSet, addSet) via preExistingSetKeys - precise enough to
+    // tell a freshly-added exercise/set apart from old pre-existing
+    // data, so this no longer needs (or wants) a blanket block on
+    // every edit session.
     if (rest) finalizeRest()
     setRest({ startedAt: Date.now(), targetSeconds: DEFAULT_REST_SECONDS, exK, setK })
   }
@@ -217,6 +216,20 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   const [notes, setNotes] = useState(workout?.notes ?? '')
   const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
+  // Snapshot of every set-key that existed the moment this editor opened
+  // - only meaningful when editing an already-saved workout. Lets the
+  // rest timer tell "genuinely new activity added during this edit"
+  // (a fresh exercise, a fresh set) apart from "old pre-existing data
+  // that just happens to look complete and untimed" - the same old-data
+  // case that caused the original spurious-timer bug. A key not in this
+  // set is unambiguously something typed or added just now, regardless
+  // of whether this is a brand-new session or an edit of an old one.
+  const [preExistingSetKeys] = useState(() => {
+    if (!workout) return null
+    const keys = new Set()
+    for (const ex of exercises) for (const s of ex.sets) keys.add(s.k)
+    return keys
+  })
   const [draft, setDraft] = useState(() => readDraft(target))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -366,7 +379,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       )
     )
 
-    if (!wasComplete && nowComplete) startRestFollowing(exK, setK)
+    if (!wasComplete && nowComplete && (!workout || !preExistingSetKeys.has(setK))) {
+      startRestFollowing(exK, setK)
+    }
   }
 
   const oppositeSide = (s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null)
@@ -383,7 +398,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     const curEx = exercises.find((e) => e.k === exK)
     const curLast = curEx?.sets[curEx.sets.length - 1]
     const curLastComplete = Boolean(curLast && curLast.weight !== '' && curLast.reps !== '')
-    const shouldStartRest = curLastComplete && !rest && curLast.restActual == null
+    const curLastIsFresh = curLast && (!workout || !preExistingSetKeys.has(curLast.k))
+    const shouldStartRest = curLastComplete && !rest && curLast.restActual == null && curLastIsFresh
 
     setExercises((list) =>
       list.map((ex) => {
