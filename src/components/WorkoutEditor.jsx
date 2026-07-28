@@ -68,7 +68,13 @@ function toModel(workout) {
   return workout.exercises.map((ex) => ({
     k: nextKey(),
     name: ex.name,
-    collapsed: false,
+    // "collapsed" was never persisted - it's a live-session UI concept
+    // only. Reopening an already-saved workout means every exercise
+    // here is, by definition, already logged - start them collapsed so
+    // it reads as a review, not an open invitation to re-edit. Only a
+    // genuinely NEW exercise added via "+Exercise" during this edit
+    // (blankExercise, elsewhere) starts open.
+    collapsed: true,
     notes: ex.notes || '',
     sets: ex.sets.map((s) => ({
       k: nextKey(),
