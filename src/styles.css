@@ -580,6 +580,18 @@ input[type='date'].input { color-scheme: dark; }
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
   text-align: center;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  width: 100%;
+  padding: 12px 4px;
+  margin: -12px -4px;
+}
+
+.set-index-warmup {
+  color: var(--blue);
+  font-weight: 700;
 }
 
 .set-row .input {
