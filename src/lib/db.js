@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 export async function fetchWorkouts() {
   const { data, error } = await supabase
     .from('workouts')
-    .select('id, date, split, notes, started_at, finished_at, exercises(id, name, notes, position, sets(id, weight, unit, reps, per_side, side, feel, position, rest_target_seconds, rest_actual_seconds))')
+    .select('id, date, split, notes, started_at, finished_at, exercises(id, name, notes, position, sets(id, weight, unit, reps, per_side, side, feel, position))')
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -38,8 +38,6 @@ export async function insertChildren(userId, workoutId, exercises) {
       per_side: Boolean(set.perSide),
       side: set.side || null,
       feel: set.feel || null,
-      rest_target_seconds: set.restTarget ?? null,
-      rest_actual_seconds: set.restActual ?? null,
       position: j,
     }))
   )
@@ -89,7 +87,6 @@ export async function mergeWorkouts(userId, keepWorkout, mergeFromWorkout) {
       notes: ex.notes,
       sets: ex.sets.map((s) => ({
         weight: s.weight, unit: s.unit, reps: s.reps, perSide: s.per_side, side: s.side, feel: s.feel,
-        restTarget: s.rest_target_seconds, restActual: s.rest_actual_seconds,
       })),
     }))
   const combinedExercises = [...toPlainExercises(keepWorkout), ...toPlainExercises(mergeFromWorkout)]
