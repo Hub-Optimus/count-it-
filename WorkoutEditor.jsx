@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide } from '../lib/db'
+import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides } from '../lib/db'
 import { todayISO, toKg } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
@@ -7,26 +7,33 @@ import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
-// Simple, scalable clock glyph for the Workout Duration card - clean line
-// icon rather than an emoji, so it renders consistently across devices
-// and can pick up the theme color via currentColor.
-function ClockIcon({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 3" />
-    </svg>
-  )
+// Synthesized tone instead of a bundled audio file - avoids adding a new
+// asset to his manual GitHub-upload workflow, and works the moment the
+// tab is in the foreground with no extra permissions needed. Best-effort
+// only: silently no-ops if the Web Audio API isn't available.
+function playRestBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.frequency.value = 880
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    gain.gain.setValueAtTime(0.2, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.35)
+  } catch { /* audio unavailable - the visual countdown still works fine */ }
 }
 
-// For the live session clock - switches to h:mm:ss once past an hour,
-// mm:ss below that, so it never shows a redundant leading "0:".
-function formatSessionClock(totalSeconds) {
-  const h = Math.floor(totalSeconds / 3600)
-  const m = Math.floor((totalSeconds % 3600) / 60)
-  const s = totalSeconds % 60
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  return `${m}:${String(s).padStart(2, '0')}`
+function formatMMSS(totalSeconds) {
+  const sign = totalSeconds < 0 ? '-' : ''
+  const abs = Math.abs(totalSeconds)
+  const m = Math.floor(abs / 60)
+  const s = abs % 60
+  return `${sign}${m}:${String(s).padStart(2, '0')}`
 }
 
 const FEELS = [
@@ -41,7 +48,10 @@ const FEEL_VALUES = FEELS.map((f) => f.value)
 // app - the button itself is just 2 letters with no room for an
 // explanation, so this fills that gap without adding permanent clutter.
 const SIDES_INTRO_KEY = 'countit_sides_intro_seen_v1'
-const PER_SIDE_INTRO_KEY = 'countit_per_side_intro_seen_v1'
+
+// Fixed default per Strong/Hevy's usual starting point - adjustable live
+// via +/-15s on the timer itself, no per-exercise custom default for v1.
+const DEFAULT_REST_SECONDS = 90
 
 let seq = 0
 const nextKey = () => `k${++seq}`
@@ -49,7 +59,7 @@ const nextKey = () => `k${++seq}`
 // Sets pre-filled from history behave exactly like any other set - no
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '' })
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', restTarget: null, restActual: null })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false })
 
 function historySet(histSet) {
@@ -61,6 +71,10 @@ function historySet(histSet) {
     perSide: Boolean(histSet.per_side),
     side: histSet.side || null,
     feel: '',
+    // A past session's rest period belongs to that session, not today's
+    // fresh set - always starts untracked regardless of what history says.
+    restTarget: null,
+    restActual: null,
   }
 }
 
@@ -69,13 +83,7 @@ function toModel(workout) {
   return workout.exercises.map((ex) => ({
     k: nextKey(),
     name: ex.name,
-    // "collapsed" was never persisted - it's a live-session UI concept
-    // only. Reopening an already-saved workout means every exercise
-    // here is, by definition, already logged - start them collapsed so
-    // it reads as a review, not an open invitation to re-edit. Only a
-    // genuinely NEW exercise added via "+Exercise" during this edit
-    // (blankExercise, elsewhere) starts open.
-    collapsed: true,
+    collapsed: false,
     notes: ex.notes || '',
     sets: ex.sets.map((s) => ({
       k: nextKey(),
@@ -85,6 +93,8 @@ function toModel(workout) {
       perSide: Boolean(s.per_side),
       side: s.side || null,
       feel: s.feel || '',
+      restTarget: s.rest_target_seconds ?? null,
+      restActual: s.rest_actual_seconds ?? null,
     })),
   }))
 }
@@ -107,87 +117,67 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // Captured once per editor mount - preserved across edits of an
   // existing workout, fresh for a genuinely new one. This is the true
   // wall-clock session start, independent of when any set gets logged.
-  // For a genuinely new session, this is the real moment it began -
-  // simple, exactly one clock, starts now and ends at Finish. For an
-  // existing workout, only use its real recorded value - never invent
-  // a fresh "right now" timestamp just because the workout is being
-  // opened, or every old workout would falsely look like it took ~0
-  // minutes the instant you edited anything else on it.
-  const [startedAt] = useState(() => (workout ? (workout.started_at ?? null) : new Date().toISOString()))
-  // Workout Duration, edited as a simple hour:minute clock picker rather
-  // than a bare number - "1:30" reads instantly, "90" makes you do math.
-  // Only ever shown for an already-saved workout being reopened.
-  const [durationHHMM, setDurationHHMM] = useState(() => {
-    if (!workout?.started_at || !workout?.finished_at) return '00:00'
-    const mins = Math.max(0, Math.round((new Date(workout.finished_at) - new Date(workout.started_at)) / 60000))
-    return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
-  })
-  // Tracks whether he actually touched the picker this session - if he
-  // didn't, the original finished_at is preserved exactly as-is rather
-  // than being recomputed from an untouched default value.
-  const [durationTouched, setDurationTouched] = useState(false)
-  // Rest-time tracking removed entirely per his explicit request - no
-  // background timestamping, no data collection, nothing. Just the
-  // Workout Duration field and the live session clock remain.
+  const [startedAt] = useState(() => workout?.started_at ?? new Date().toISOString())
+  // Rest timer: { startedAt (ms, Date.now()), targetSeconds, exK, setK }.
+  // Global to the whole session (not per-exercise) - starting any new
+  // set anywhere finalizes whatever was running and starts the next one.
+  const [rest, setRest] = useState(null)
   const [, forceTick] = useState(0)
-  // Flips true the first time genuinely new activity (a freshly typed
-  // set, a freshly added exercise) is detected during THIS edit session -
-  // that's what makes the session clock reappear, without it also
-  // reappearing just because an old workout was opened to fix a typo.
-  const [liveActivityDetected, setLiveActivityDetected] = useState(!workout)
-  // What the workout's duration already was BEFORE this edit session
-  // reopened it - captured once at mount, from its real recorded
-  // timestamps. This is the anchor the live clock resumes from.
-  const [priorDurationSeconds] = useState(() => {
-    if (!workout?.started_at || !workout?.finished_at) return 0
-    const secs = Math.round((new Date(workout.finished_at) - new Date(workout.started_at)) / 1000)
-    return Number.isFinite(secs) && secs >= 0 ? secs : 0
-  })
-  // The clock's anchor is a VIRTUAL start time, not the real one - "now
-  // minus whatever duration was already recorded" - so it continues
-  // ticking up from exactly where it left off (e.g. 3:00) rather than
-  // counting the real gap since the original session (e.g. 47 minutes
-  // if he stepped away and came back). A break should never silently
-  // become part of the workout duration.
-  const [clockAnchorMs] = useState(() => (workout ? null : new Date(startedAt).getTime()))
-  const [resumedClockAnchorMs, setResumedClockAnchorMs] = useState(null)
-  const effectiveClockAnchorMs = clockAnchorMs ?? resumedClockAnchorMs
+  const playedDoneSoundRef = useRef(false)
 
-  const sessionClockVisible = liveActivityDetected && effectiveClockAnchorMs != null
-
-  // Live session clock - ticks continuously once visible.
   useEffect(() => {
-    if (!sessionClockVisible) return
-    const id = setInterval(() => forceTick((t) => t + 1), 1000)
+    if (!rest) return
+    const id = setInterval(() => forceTick((t) => t + 1), 500)
     return () => clearInterval(id)
-  }, [sessionClockVisible])
+  }, [rest])
 
-  const sessionElapsedSeconds = sessionClockVisible ? Math.floor((Date.now() - effectiveClockAnchorMs) / 1000) : 0
+  useEffect(() => {
+    playedDoneSoundRef.current = false
+  }, [rest?.startedAt])
 
-  // Called the moment genuinely new activity is detected during an edit
-  // session - flips the clock on, anchored to skip the gap since the
-  // workout was originally finished.
-  function markLiveActivity() {
-    if (liveActivityDetected) return
-    setLiveActivityDetected(true)
-    setResumedClockAnchorMs(Date.now() - priorDurationSeconds * 1000)
+  const restElapsedSeconds = rest ? Math.floor((Date.now() - rest.startedAt) / 1000) : 0
+  const restRemainingSeconds = rest ? rest.targetSeconds - restElapsedSeconds : 0
+
+  useEffect(() => {
+    if (rest && restRemainingSeconds <= 0 && !playedDoneSoundRef.current) {
+      playedDoneSoundRef.current = true
+      playRestBeep()
+      try { navigator.vibrate?.(200) } catch { /* not supported - visual countdown still works */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restRemainingSeconds > 0])
+
+  function finalizeRest() {
+    if (!rest) return
+    const actualSeconds = Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000))
+    const { exK, setK, targetSeconds } = rest
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.k === exK
+          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, restTarget: targetSeconds, restActual: actualSeconds } : s)) }
+          : ex
+      )
+    )
+    setRest(null)
+  }
+
+  function startRestFollowing(exK, setK) {
+    // Rest timers are a "this is happening right now" concept. Editing
+    // an already-saved workout (fixing a number, adding a forgotten set
+    // days later) is data correction, not a live session - nothing
+    // should ever start counting down in that case, no matter how the
+    // completion-detection below reads the data.
+    if (workout) return
+    if (rest) finalizeRest()
+    setRest({ startedAt: Date.now(), targetSeconds: DEFAULT_REST_SECONDS, exK, setK })
+  }
+
+  function adjustRest(deltaSeconds) {
+    setRest((r) => (r ? { ...r, targetSeconds: Math.max(0, r.targetSeconds + deltaSeconds) } : r))
   }
 
   const [notes, setNotes] = useState(workout?.notes ?? '')
   const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
-  // Snapshot of every set-key that existed the moment this editor opened
-  // - only meaningful when editing an already-saved workout. Lets us
-  // tell "genuinely new activity added during this edit" (a fresh
-  // exercise, a fresh set) apart from old pre-existing data that just
-  // happens to look complete. A key not in this set is unambiguously
-  // something typed or added just now, regardless of whether this is a
-  // brand-new session or an edit of an old one.
-  const [preExistingSetKeys] = useState(() => {
-    if (!workout) return null
-    const keys = new Set()
-    for (const ex of exercises) for (const s of ex.sets) keys.add(s.k)
-    return keys
-  })
   const [draft, setDraft] = useState(() => readDraft(target))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -222,12 +212,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   async function enableTrackSides(exerciseName) {
     const key = exerciseName.trim().toLowerCase()
-    // Mutually exclusive with Per Side for the same exercise -
-    // alternating single-arm sets and both-hands-at-once sets can't
-    // both be true for the same exercise at the same time.
-    if (targets[key]?.perSide) {
-      await disablePerSide(exerciseName)
-    }
     setTargets((t) => ({ ...t, [key]: { ...t[key], trackSides: true } }))
     // Seed every set already in this exercise with an alternating L/R,
     // not just the first one - otherwise turning this on after sets 2+
@@ -269,60 +253,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     touch()
     try {
       await setTrackSides(user.id, exerciseName.trim(), false)
-    } catch { /* best effort - local state already updated */ }
-  }
-
-  function maybeExplainThenEnablePerSide(exerciseName) {
-    try {
-      if (!localStorage.getItem(PER_SIDE_INTRO_KEY)) {
-        window.alert(
-          'Mark this exercise "Per side weight" when you hold weight in BOTH hands at once (e.g. dumbbell bench press).\n\n' +
-          'The number you log is treated as what\'s in each hand - total volume is doubled automatically.\n\n' +
-          'This is different from Track left/right, which is for alternating single-arm sets - turning one on turns the other off for this exercise.'
-        )
-        localStorage.setItem(PER_SIDE_INTRO_KEY, '1')
-      }
-    } catch { /* localStorage unavailable - skip the one-time explainer, not critical */ }
-    enablePerSide(exerciseName)
-  }
-
-  async function enablePerSide(exerciseName) {
-    const key = exerciseName.trim().toLowerCase()
-    // Mutually exclusive with Track Sides for the same exercise - see
-    // the note in enableTrackSides above.
-    if (targets[key]?.trackSides) {
-      await disableTrackSides(exerciseName)
-    }
-    setTargets((t) => ({ ...t, [key]: { ...t[key], perSide: true } }))
-    // Every existing set in this exercise is retroactively per-side too
-    // - matches how enableTrackSides seeds all existing sets, not just
-    // new ones going forward.
-    setExercises((list) =>
-      list.map((ex) =>
-        ex.name.trim().toLowerCase() === key
-          ? { ...ex, sets: ex.sets.map((s) => ({ ...s, perSide: true })) }
-          : ex
-      )
-    )
-    touch()
-    try {
-      await setPerSide(user.id, exerciseName.trim(), true)
-    } catch { /* best effort - local state already updated */ }
-  }
-
-  async function disablePerSide(exerciseName) {
-    const key = exerciseName.trim().toLowerCase()
-    setTargets((t) => ({ ...t, [key]: { ...t[key], perSide: false } }))
-    setExercises((list) =>
-      list.map((ex) =>
-        ex.name.trim().toLowerCase() === key
-          ? { ...ex, sets: ex.sets.map((s) => ({ ...s, perSide: false })) }
-          : ex
-      )
-    )
-    touch()
-    try {
-      await setPerSide(user.id, exerciseName.trim(), false)
     } catch { /* best effort - local state already updated */ }
   }
   const dirtyRef = useRef(false)
@@ -397,16 +327,25 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       )
     )
 
-    if (!wasComplete && nowComplete && (!workout || !preExistingSetKeys.has(setK))) {
-      markLiveActivity()
-    }
+    if (!wasComplete && nowComplete) startRestFollowing(exK, setK)
   }
 
   const oppositeSide = (s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null)
 
   function addSet(exK) {
     touch()
-    markLiveActivity()
+    // Tapping "+ Set" is the real "I just finished that set" signal for
+    // any set that arrived pre-filled (copied from the last one, or from
+    // history) rather than hand-typed - those never pass through
+    // updateSet's blank-to-filled detection, so without this they'd
+    // never get timed at all. Only fires if nothing's already timing
+    // that set (avoids double-triggering when it WAS hand-typed and
+    // already started a timer of its own).
+    const curEx = exercises.find((e) => e.k === exK)
+    const curLast = curEx?.sets[curEx.sets.length - 1]
+    const curLastComplete = Boolean(curLast && curLast.weight !== '' && curLast.reps !== '')
+    const shouldStartRest = curLastComplete && !rest && curLast.restActual == null
+
     setExercises((list) =>
       list.map((ex) => {
         if (ex.k !== exK) return ex
@@ -418,7 +357,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           newSet = historySet(histNext)
         } else {
           newSet = last
-            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '' }
+            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '', restTarget: null, restActual: null }
             : blankSet(defaultUnit)
         }
         // Alternating takes priority over whatever history/copy suggested -
@@ -427,6 +366,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         return { ...ex, sets: [...ex.sets, newSet] }
       })
     )
+
+    if (shouldStartRest) startRestFollowing(exK, curLast.k)
   }
 
   function removeSet(exK, setK) {
@@ -436,7 +377,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function addExercise() {
     touch()
-    markLiveActivity()
     setExercises((list) => [...list, blankExercise(defaultUnit)])
   }
 
@@ -483,6 +423,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   async function save() {
     setError('')
 
+    // If a rest timer is still running at Finish time, its actual
+    // elapsed duration needs to land in THIS payload directly - going
+    // through finalizeRest's setExercises first wouldn't be reflected
+    // in `exercises` until next render, which is too late for the
+    // payload we're about to build right now.
+    const pendingRest = rest
+      ? { exK: rest.exK, setK: rest.setK, restTarget: rest.targetSeconds, restActual: Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000)) }
+      : null
+
     const payload = exercises
       .map((ex) => ({
         name: ex.name.trim(),
@@ -492,6 +441,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           .map((s) => {
             const w = s.weight === '' ? null : parseFloat(s.weight)
             const r = s.reps === '' ? null : parseInt(s.reps, 10)
+            const isPending = pendingRest && ex.k === pendingRest.exK && s.k === pendingRest.setK
             return {
               weight: Number.isFinite(w) ? w : null,
               unit: s.unit,
@@ -499,6 +449,8 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               perSide: s.perSide,
               side: s.side || null,
               feel: s.feel.trim() || null,
+              restTarget: isPending ? pendingRest.restTarget : (s.restTarget ?? null),
+              restActual: isPending ? pendingRest.restActual : (s.restActual ?? null),
             }
           }),
       }))
@@ -508,30 +460,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
     setSaving(true)
     try {
-      // Three cases: (1) a genuinely new session - simple, real "now" at
-      // Finish, exactly one clock start-to-end. (2) an existing workout
-      // where he touched the duration picker - honor that number
-      // directly, anchored to its real started_at if it has one, or to
-      // midnight of its date if it never had timing data at all (never
-      // pair a fabricated "now" with a real old date). (3) an existing
-      // workout he didn't touch the duration on - preserve its original
-      // timing exactly, untouched, no matter what else he edited.
-      let startedAtToSave = startedAt
-      let finishedAtToSave
-      if (!workout) {
-        finishedAtToSave = new Date().toISOString()
-      } else if (durationTouched) {
-        const [hh, mm] = durationHHMM.split(':').map(Number)
-        const durationMs = ((hh || 0) * 60 + (mm || 0)) * 60000
-        const anchorMs = startedAt ? new Date(startedAt).getTime() : new Date(`${date}T00:00:00`).getTime()
-        if (!startedAt) startedAtToSave = new Date(anchorMs).toISOString()
-        finishedAtToSave = new Date(anchorMs + durationMs).toISOString()
-      } else {
-        finishedAtToSave = workout.finished_at ?? null
-      }
-      const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload, startedAt: startedAtToSave, finishedAt: finishedAtToSave }
+      const finishedAt = new Date().toISOString()
+      const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload, startedAt, finishedAt }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
+      if (rest) setRest(null)
       clearDraft()
       onSaved()
     } catch (e) {
@@ -550,28 +483,16 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         </button>
       </div>
 
-      {(sessionClockVisible || workout) && (
-        <div className={`workout-time-card ${sessionClockVisible ? 'workout-time-live' : ''}`}>
-          <ClockIcon className="workout-time-icon" />
-          <div className="workout-time-body">
-            <div className="workout-time-label">
-              {sessionClockVisible && <span className="workout-time-dot" aria-hidden="true" />}
-              Workout Duration
-            </div>
-            {sessionClockVisible ? (
-              <div className="workout-time-value">{formatSessionClock(sessionElapsedSeconds)}</div>
-            ) : (
-              <>
-                <input
-                  id="w-duration"
-                  className="input workout-time-input"
-                  type="time"
-                  value={durationHHMM}
-                  onChange={(e) => { touch(); setDurationTouched(true); setDurationHHMM(e.target.value) }}
-                />
-                <div className="field-hint">Forgot to hit Finish on time? Correct it here.</div>
-              </>
-            )}
+      {rest && (
+        <div className={`rest-bar ${restRemainingSeconds <= 0 ? 'rest-bar-done' : ''}`}>
+          <div className="rest-bar-time">
+            {restRemainingSeconds > 0 ? formatMMSS(restRemainingSeconds) : `+${formatMMSS(Math.abs(restRemainingSeconds))}`}
+          </div>
+          <div className="rest-bar-label">{restRemainingSeconds > 0 ? 'Resting' : 'Rest complete'}</div>
+          <div className="rest-bar-actions">
+            <button className="mini-btn" onClick={() => adjustRest(-15)} aria-label="15 seconds less">-15s</button>
+            <button className="mini-btn" onClick={() => adjustRest(15)} aria-label="15 seconds more">+15s</button>
+            <button className="btn rest-bar-skip" onClick={finalizeRest}>Skip</button>
           </div>
         </div>
       )}
@@ -616,7 +537,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         // feature once on an exercise made it silently reappear "on" in
         // every future session for that exercise, unasked.
         const sidesActive = Boolean(targetInfo?.trackSides)
-        const perSideActive = Boolean(targetInfo?.perSide)
         const targetReps = targetInfo?.reps || null
         const targetWeightRef = lastSession?.sets?.length
           ? lastSession.sets.reduce((max, s) => (s.weight != null && (!max || toKg(s.weight, s.unit) > toKg(max.weight, max.unit)) ? s : max), null)
@@ -627,50 +547,31 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           ? validSets.reduce((best, st) => (Number(st.weight) > Number(best.weight) ? st : best), validSets[0])
           : null
         return (
-        <div className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`} key={ex.k}>
-          {ex.collapsed ? (
-            <div className="exercise-collapsed-row">
-              {ExPic && (
-                <span className="exercise-thumb exercise-thumb-sm" style={{ background: exColor + '26' }}>
-                  <ExPic width="20" height="20" />
-                </span>
-              )}
-              <span className="exercise-collapsed-text">
-                <span className="exercise-collapsed-name">{ex.name || `Exercise ${exIdx + 1}`}</span>
-                <span className="exercise-collapsed-meta">
-                  {validSets.length} set{validSets.length === 1 ? '' : 's'}
-                  {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
-                </span>
+        <div className="exercise-block" key={ex.k}>
+          <div className="exercise-head">
+            {ExPic && (
+              <span className="exercise-thumb" style={{ background: exColor + '26' }}>
+                <ExPic width="30" height="30" />
               </span>
-              <span className="exercise-done-badge" aria-label="Marked done" title="Done">✓</span>
-              <button className="exercise-edit-hint" onClick={() => toggleCollapsed(ex.k)}>Edit</button>
-            </div>
-          ) : (
-            <>
-            <div className="exercise-head">
-              {ExPic && (
-                <span className="exercise-thumb" style={{ background: exColor + '26' }}>
-                  <ExPic width="30" height="30" />
-                </span>
-              )}
-              <input
-                className="input"
-                placeholder={`Exercise ${exIdx + 1}`}
-                value={ex.name}
-                onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
-              />
-              <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
-                </svg>
+            )}
+            <input
+              className="input"
+              placeholder={`Exercise ${exIdx + 1}`}
+              value={ex.name}
+              onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
+            />
+            <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
+              </svg>
+            </button>
+            {!ex.collapsed && ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
+              <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
+                ✓ Done
               </button>
-              {ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
-                <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
-                  ✓ Done
-                </button>
-              )}
-              <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
-            </div>
+            )}
+            <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
+          </div>
 
           {(ex.notes || ex.notesOpen) ? (
             <textarea
@@ -691,6 +592,16 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             </button>
           )}
 
+          {ex.collapsed ? (
+            <button className="exercise-summary" onClick={() => toggleCollapsed(ex.k)}>
+              <span className="small">
+                {validSets.length} set{validSets.length === 1 ? '' : 's'}
+                {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
+              </span>
+              <span className="small" style={{ color: 'var(--yellow)' }}>Edit</span>
+            </button>
+          ) : (
+          <>
           {pickerFor === ex.k && (
             <ExercisePicker
               recentNames={exerciseNames}
@@ -753,18 +664,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               >
                 {sidesActive ? '✓ Tracking left/right' : 'Track left/right'}
               </button>
-              <button
-                className={`target-chip ${perSideActive ? '' : 'target-chip-empty'}`}
-                onClick={() => (perSideActive ? disablePerSide(ex.name) : maybeExplainThenEnablePerSide(ex.name))}
-              >
-                {perSideActive ? '✓ Per side weight' : 'Per side weight'}
-              </button>
             </div>
-            {perSideActive && (
-              <div className="field-hint" style={{ marginTop: -4, marginBottom: 8 }}>
-                Weight logged is per hand — volume is doubled automatically.
-              </div>
-            )}
           </div>
           )}
 

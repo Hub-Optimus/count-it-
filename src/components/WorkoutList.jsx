@@ -13,6 +13,40 @@ function volumeKg(workout) {
   return total
 }
 
+// "3h 30m" instead of "210 min" - and "45m" (not "0h 45m") under an hour.
+function formatDuration(totalMinutes) {
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+// Total wall-clock session length - null for older workouts logged
+// before this was tracked, so callers must handle the absent case.
+function durationMinutes(workout) {
+  if (!workout.started_at || !workout.finished_at) return null
+  const ms = new Date(workout.finished_at) - new Date(workout.started_at)
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  return Math.round(ms / 60000)
+}
+
+// No live rest tracking anymore, so this is a simple estimate rather
+// than a measurement: one rest gap assumed between every consecutive
+// set in the session, at a standard length. Capped so it never exceeds
+// the real recorded Duration - a fast test session with only a few
+// real seconds between sets would otherwise show a nonsensical
+// negative Active time.
+const STANDARD_REST_SECONDS = 90
+
+function estimatedRestMinutes(workout, totalDurationMinutes) {
+  const totalSets = workout.exercises.reduce((n, ex) => n + ex.sets.length, 0)
+  const gaps = Math.max(0, totalSets - 1)
+  const rawMinutes = Math.round((gaps * STANDARD_REST_SECONDS) / 60)
+  if (totalDurationMinutes == null) return rawMinutes
+  return Math.min(rawMinutes, totalDurationMinutes)
+}
+
 // First-appearance-ordered, deduped muscle groups actually trained in this session.
 function musclesFor(workout) {
   const seen = []
@@ -42,6 +76,8 @@ export default function WorkoutList({ workouts, onOpen }) {
         const vol = volumeKg(w)
         const muscles = musclesFor(w)
         const heading = w.split || (muscles.length ? muscles.join(' + ') : 'Workout')
+        const mins = durationMinutes(w)
+        const restEst = mins != null ? estimatedRestMinutes(w, mins) : null
         return (
           <button key={w.id} className="workout-card" onClick={() => onOpen(w)}>
             <span className="wc-date">
@@ -53,6 +89,11 @@ export default function WorkoutList({ workouts, onOpen }) {
               <div className="wc-meta">
                 {w.exercises.length} exercises · {setCount} sets{vol > 0 ? ` · ${fmtVolume(vol)}` : ''}
               </div>
+              {mins != null && (
+                <div className="wc-notes">
+                  Duration: {formatDuration(mins)} · Rest time (est.): {formatDuration(restEst)} · Active time: {formatDuration(Math.max(0, mins - restEst))}
+                </div>
+              )}
               {w.split && muscles.length > 0 && <div className="wc-notes">{muscles.join(' + ')}</div>}
               {w.notes && <div className="wc-notes">{w.notes}</div>}
             </span>
