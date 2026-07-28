@@ -444,8 +444,7 @@ input[type='date'].input { color-scheme: dark; }
   text-overflow: ellipsis;
 }
 
-/* Status badge, not a button - no hover/tap styling of its own, so it
-   never reads as something to tap. The whole row is the tap target. */
+/* Status badge, not a button - purely a visual "done" indicator. */
 .exercise-done-badge {
   flex: none;
   width: 22px;
@@ -460,8 +459,16 @@ input[type='date'].input { color-scheme: dark; }
   font-weight: 700;
 }
 
+/* The only actionable element in a collapsed exercise row - everything
+   else (icon, name, meta, badge) is inert display, so an accidental tap
+   anywhere else on the row never reopens it for editing. */
 .exercise-edit-hint {
   flex: none;
+  background: transparent;
+  border: none;
+  padding: 4px 2px;
+  margin: -4px -2px;
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   color: var(--yellow);
