@@ -7,6 +7,18 @@ import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
+// Simple, scalable clock glyph for the Workout Duration card - clean line
+// icon rather than an emoji, so it renders consistently across devices
+// and can pick up the theme color via currentColor.
+function ClockIcon({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 3" />
+    </svg>
+  )
+}
+
 // For the live session clock - switches to h:mm:ss once past an hour,
 // mm:ss below that, so it never shows a redundant leading "0:".
 function formatSessionClock(totalSeconds) {
@@ -471,11 +483,29 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         </button>
       </div>
 
-      {sessionClockVisible && (
-        <div className="session-clock">
-          <span className="session-clock-dot" aria-hidden="true" />
-          <span className="session-clock-label">Workout time</span>
-          <span className="session-clock-time">{formatSessionClock(sessionElapsedSeconds)}</span>
+      {(sessionClockVisible || workout) && (
+        <div className={`workout-time-card ${sessionClockVisible ? 'workout-time-live' : ''}`}>
+          <ClockIcon className="workout-time-icon" />
+          <div className="workout-time-body">
+            <div className="workout-time-label">
+              {sessionClockVisible && <span className="workout-time-dot" aria-hidden="true" />}
+              Workout Duration
+            </div>
+            {sessionClockVisible ? (
+              <div className="workout-time-value">{formatSessionClock(sessionElapsedSeconds)}</div>
+            ) : (
+              <>
+                <input
+                  id="w-duration"
+                  className="input workout-time-input"
+                  type="time"
+                  value={durationHHMM}
+                  onChange={(e) => { touch(); setDurationTouched(true); setDurationHHMM(e.target.value) }}
+                />
+                <div className="field-hint">Forgot to hit Finish on time? Correct it here.</div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -493,20 +523,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         <label className="label" htmlFor="w-date">Date</label>
         <input id="w-date" className="input" type="date" value={date} onChange={(e) => { touch(); setDate(e.target.value) }} />
       </div>
-
-      {workout && (
-        <div className="field">
-          <label className="label" htmlFor="w-duration">Workout Duration</label>
-          <input
-            id="w-duration"
-            className="input"
-            type="time"
-            value={durationHHMM}
-            onChange={(e) => { touch(); setDurationTouched(true); setDurationHHMM(e.target.value) }}
-          />
-          <div className="field-hint">Forgot to hit Finish on time? Correct it here.</div>
-        </div>
-      )}
 
       {!workout && workouts.length > 0 && (
         <button className="btn btn-block" onClick={copyPreviousSession}>
