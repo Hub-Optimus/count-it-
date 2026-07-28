@@ -745,37 +745,6 @@ input[type='date'].input { color-scheme: dark; }
   font-variant-numeric: tabular-nums;
 }
 
-.rest-bar {
-  position: sticky;
-  top: 130px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--card-2);
-  border: 1px solid var(--yellow);
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  margin-bottom: 12px;
-}
-
-.rest-bar-time {
-  font-family: var(--display);
-  font-size: 26px;
-  color: var(--yellow);
-  min-width: 68px;
-  font-variant-numeric: tabular-nums;
-}
-
-.rest-bar-label { flex: 1; font-size: 13px; color: var(--ink-dim); }
-
-.rest-bar-actions { display: flex; gap: 6px; flex: none; }
-.rest-bar-actions .mini-btn { min-height: 36px; font-size: 11px; padding: 0 8px; }
-.rest-bar-skip { min-height: 36px; padding: 0 12px; font-size: 12px; }
-
-.rest-bar-done { border-color: var(--green); }
-.rest-bar-done .rest-bar-time { color: var(--green); }
-
 .banner {
   display: flex;
   align-items: center;
