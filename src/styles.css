@@ -581,17 +581,21 @@ input[type='date'].input { color-scheme: dark; }
   font-variant-numeric: tabular-nums;
   text-align: center;
   background: transparent;
-  border: none;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
   font-family: inherit;
   cursor: pointer;
   width: 100%;
-  padding: 12px 4px;
-  margin: -12px -4px;
+  box-sizing: border-box;
+  padding: 8px 2px;
 }
 
 .set-index-warmup {
   color: var(--blue);
   font-weight: 700;
+  border-style: solid;
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 16%, transparent);
 }
 
 .set-row .input {
