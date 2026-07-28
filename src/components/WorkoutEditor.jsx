@@ -7,35 +7,6 @@ import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
-// Synthesized tone instead of a bundled audio file - avoids adding a new
-// asset to his manual GitHub-upload workflow, and works the moment the
-// tab is in the foreground with no extra permissions needed. Best-effort
-// only: silently no-ops if the Web Audio API isn't available.
-function playRestBeep() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext
-    if (!Ctx) return
-    const ctx = new Ctx()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.frequency.value = 880
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    gain.gain.setValueAtTime(0.2, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
-    osc.start()
-    osc.stop(ctx.currentTime + 0.35)
-  } catch { /* audio unavailable - the visual countdown still works fine */ }
-}
-
-function formatMMSS(totalSeconds) {
-  const sign = totalSeconds < 0 ? '-' : ''
-  const abs = Math.abs(totalSeconds)
-  const m = Math.floor(abs / 60)
-  const s = abs % 60
-  return `${sign}${m}:${String(s).padStart(2, '0')}`
-}
-
 // For the live session clock - switches to h:mm:ss once past an hour,
 // mm:ss below that, so it never shows a redundant leading "0:".
 function formatSessionClock(totalSeconds) {
@@ -58,10 +29,6 @@ const FEEL_VALUES = FEELS.map((f) => f.value)
 // app - the button itself is just 2 letters with no room for an
 // explanation, so this fills that gap without adding permanent clutter.
 const SIDES_INTRO_KEY = 'countit_sides_intro_seen_v1'
-
-// Fixed default per Strong/Hevy's usual starting point - adjustable live
-// via +/-15s on the timer itself, no per-exercise custom default for v1.
-const DEFAULT_REST_SECONDS = 90
 
 let seq = 0
 const nextKey = () => `k${++seq}`
@@ -146,54 +113,42 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // didn't, the original finished_at is preserved exactly as-is rather
   // than being recomputed from an untouched default value.
   const [durationTouched, setDurationTouched] = useState(false)
-  // Rest timer: { startedAt (ms, Date.now()), targetSeconds, exK, setK }.
-  // Global to the whole session (not per-exercise) - starting any new
-  // set anywhere finalizes whatever was running and starts the next one.
+  // Rest tracking is now silent, background bookkeeping only - no live
+  // countdown bar, no target to set/adjust, no beep. He found the visible
+  // countdown too intrusive; the useful part (the real Duration/Rest
+  // time/Active time numbers on past workouts) doesn't need a live
+  // display to work, just the start/end timestamps captured here.
   const [rest, setRest] = useState(null)
   const [, forceTick] = useState(0)
-  const playedDoneSoundRef = useRef(false)
+  // Flips true the first time genuinely new activity (a freshly typed
+  // set, a freshly added exercise) is detected during THIS edit session -
+  // that's what makes the session clock reappear and resume from the
+  // workout's real start time, without it also reappearing just because
+  // an old workout was opened to fix a typo.
+  const [liveActivityDetected, setLiveActivityDetected] = useState(!workout)
 
-  // Live session clock - ticks continuously for the whole time a new
-  // session is open, independent of the rest timer. Never shown while
-  // editing an already-saved workout (nothing "live" is happening then).
+  const sessionClockVisible = liveActivityDetected && Boolean(startedAt)
+
+  // Live session clock - ticks continuously once visible, continuing
+  // from the workout's real start time rather than resetting, so
+  // reopening a same-day session to add more to it resumes exactly
+  // where it left off instead of restarting from zero.
   useEffect(() => {
-    if (workout) return
+    if (!sessionClockVisible) return
     const id = setInterval(() => forceTick((t) => t + 1), 1000)
     return () => clearInterval(id)
-  }, [workout])
+  }, [sessionClockVisible])
 
-  const sessionElapsedSeconds = !workout ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000) : 0
-
-  useEffect(() => {
-    if (!rest) return
-    const id = setInterval(() => forceTick((t) => t + 1), 500)
-    return () => clearInterval(id)
-  }, [rest])
-
-  useEffect(() => {
-    playedDoneSoundRef.current = false
-  }, [rest?.startedAt])
-
-  const restElapsedSeconds = rest ? Math.floor((Date.now() - rest.startedAt) / 1000) : 0
-  const restRemainingSeconds = rest ? rest.targetSeconds - restElapsedSeconds : 0
-
-  useEffect(() => {
-    if (rest && restRemainingSeconds <= 0 && !playedDoneSoundRef.current) {
-      playedDoneSoundRef.current = true
-      playRestBeep()
-      try { navigator.vibrate?.(200) } catch { /* not supported - visual countdown still works */ }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restRemainingSeconds > 0])
+  const sessionElapsedSeconds = sessionClockVisible ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000) : 0
 
   function finalizeRest() {
     if (!rest) return
     const actualSeconds = Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000))
-    const { exK, setK, targetSeconds } = rest
+    const { exK, setK } = rest
     setExercises((list) =>
       list.map((ex) =>
         ex.k === exK
-          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, restTarget: targetSeconds, restActual: actualSeconds } : s)) }
+          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, restTarget: null, restActual: actualSeconds } : s)) }
           : ex
       )
     )
@@ -201,17 +156,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   function startRestFollowing(exK, setK) {
-    // The "is this genuinely new" check now lives in each caller
-    // (updateSet, addSet) via preExistingSetKeys - precise enough to
-    // tell a freshly-added exercise/set apart from old pre-existing
-    // data, so this no longer needs (or wants) a blanket block on
-    // every edit session.
+    setLiveActivityDetected(true)
     if (rest) finalizeRest()
-    setRest({ startedAt: Date.now(), targetSeconds: DEFAULT_REST_SECONDS, exK, setK })
-  }
-
-  function adjustRest(deltaSeconds) {
-    setRest((r) => (r ? { ...r, targetSeconds: Math.max(0, r.targetSeconds + deltaSeconds) } : r))
+    setRest({ startedAt: Date.now(), exK, setK })
   }
 
   const [notes, setNotes] = useState(workout?.notes ?? '')
@@ -388,6 +335,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function addSet(exK) {
     touch()
+    setLiveActivityDetected(true)
     // Tapping "+ Set" is the real "I just finished that set" signal for
     // any set that arrived pre-filled (copied from the last one, or from
     // history) rather than hand-typed - those never pass through
@@ -432,6 +380,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function addExercise() {
     touch()
+    setLiveActivityDetected(true)
     setExercises((list) => [...list, blankExercise(defaultUnit)])
   }
 
@@ -484,7 +433,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     // in `exercises` until next render, which is too late for the
     // payload we're about to build right now.
     const pendingRest = rest
-      ? { exK: rest.exK, setK: rest.setK, restTarget: rest.targetSeconds, restActual: Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000)) }
+      ? { exK: rest.exK, setK: rest.setK, restActual: Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000)) }
       : null
 
     const payload = exercises
@@ -504,7 +453,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               perSide: s.perSide,
               side: s.side || null,
               feel: s.feel.trim() || null,
-              restTarget: isPending ? pendingRest.restTarget : (s.restTarget ?? null),
+              restTarget: isPending ? null : (s.restTarget ?? null),
               restActual: isPending ? pendingRest.restActual : (s.restActual ?? null),
             }
           }),
@@ -558,25 +507,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         </button>
       </div>
 
-      {!workout && (
+      {sessionClockVisible && (
         <div className="session-clock">
           <span className="session-clock-dot" aria-hidden="true" />
           <span className="session-clock-label">Workout time</span>
           <span className="session-clock-time">{formatSessionClock(sessionElapsedSeconds)}</span>
-        </div>
-      )}
-
-      {rest && (
-        <div className={`rest-bar ${restRemainingSeconds <= 0 ? 'rest-bar-done' : ''}`}>
-          <div className="rest-bar-time">
-            {restRemainingSeconds > 0 ? formatMMSS(restRemainingSeconds) : `+${formatMMSS(Math.abs(restRemainingSeconds))}`}
-          </div>
-          <div className="rest-bar-label">{restRemainingSeconds > 0 ? 'Resting' : 'Rest complete'}</div>
-          <div className="rest-bar-actions">
-            <button className="mini-btn" onClick={() => adjustRest(-15)} aria-label="15 seconds less">-15s</button>
-            <button className="mini-btn" onClick={() => adjustRest(15)} aria-label="15 seconds more">+15s</button>
-            <button className="btn rest-bar-skip" onClick={finalizeRest}>Skip</button>
-          </div>
         </div>
       )}
 
