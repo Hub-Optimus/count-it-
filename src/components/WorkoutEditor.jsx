@@ -567,7 +567,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         return (
         <div className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`} key={ex.k}>
           {ex.collapsed ? (
-            <button className="exercise-collapsed-row" onClick={() => toggleCollapsed(ex.k)}>
+            <div className="exercise-collapsed-row">
               {ExPic && (
                 <span className="exercise-thumb exercise-thumb-sm" style={{ background: exColor + '26' }}>
                   <ExPic width="20" height="20" />
@@ -580,9 +580,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
                 </span>
               </span>
-              <span className="exercise-done-badge" aria-label="Marked done" title="Done — tap to edit">✓</span>
-              <span className="exercise-edit-hint">Edit</span>
-            </button>
+              <span className="exercise-done-badge" aria-label="Marked done" title="Done">✓</span>
+              <button className="exercise-edit-hint" onClick={() => toggleCollapsed(ex.k)}>Edit</button>
+            </div>
           ) : (
             <>
             <div className="exercise-head">
