@@ -794,7 +794,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               <div key={s.k}>
                 <div className="set-row">
                   <button
-                    className={`set-index ${s.warmup ? 'set-index-warmup' : ''}`}
+                    className={`set-index ${s.warmup ? 'set-index-warmup' : ''} ${i === 0 && !warmupHintSeen ? 'set-index-hint' : ''}`}
                     onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
                     aria-label={s.warmup ? `Set ${i + 1}, warm-up — tap to unmark` : `Set ${i + 1} — tap to mark as warm-up`}
                     title={s.warmup ? 'Warm-up set' : 'Tap to mark as warm-up'}
@@ -850,11 +850,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   )}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>✕</button>
                 </div>
-                {i === 0 && !warmupHintSeen && (
-                  <div className="field-hint warmup-hint">
-                    Tap the number (currently "{i + 1}") to mark this set a warm-up — it won't count toward your Best, average, or volume.
-                  </div>
-                )}
                 <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
                   {customFeel ? (
