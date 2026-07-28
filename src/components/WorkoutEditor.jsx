@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides } from '../lib/db'
+import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide } from '../lib/db'
 import { todayISO, toKg } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
@@ -41,6 +41,7 @@ const FEEL_VALUES = FEELS.map((f) => f.value)
 // app - the button itself is just 2 letters with no room for an
 // explanation, so this fills that gap without adding permanent clutter.
 const SIDES_INTRO_KEY = 'countit_sides_intro_seen_v1'
+const PER_SIDE_INTRO_KEY = 'countit_per_side_intro_seen_v1'
 
 let seq = 0
 const nextKey = () => `k${++seq}`
@@ -221,6 +222,12 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   async function enableTrackSides(exerciseName) {
     const key = exerciseName.trim().toLowerCase()
+    // Mutually exclusive with Per Side for the same exercise -
+    // alternating single-arm sets and both-hands-at-once sets can't
+    // both be true for the same exercise at the same time.
+    if (targets[key]?.perSide) {
+      await disablePerSide(exerciseName)
+    }
     setTargets((t) => ({ ...t, [key]: { ...t[key], trackSides: true } }))
     // Seed every set already in this exercise with an alternating L/R,
     // not just the first one - otherwise turning this on after sets 2+
@@ -262,6 +269,60 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     touch()
     try {
       await setTrackSides(user.id, exerciseName.trim(), false)
+    } catch { /* best effort - local state already updated */ }
+  }
+
+  function maybeExplainThenEnablePerSide(exerciseName) {
+    try {
+      if (!localStorage.getItem(PER_SIDE_INTRO_KEY)) {
+        window.alert(
+          'Mark this exercise "Per side weight" when you hold weight in BOTH hands at once (e.g. dumbbell bench press).\n\n' +
+          'The number you log is treated as what\'s in each hand - total volume is doubled automatically.\n\n' +
+          'This is different from Track left/right, which is for alternating single-arm sets - turning one on turns the other off for this exercise.'
+        )
+        localStorage.setItem(PER_SIDE_INTRO_KEY, '1')
+      }
+    } catch { /* localStorage unavailable - skip the one-time explainer, not critical */ }
+    enablePerSide(exerciseName)
+  }
+
+  async function enablePerSide(exerciseName) {
+    const key = exerciseName.trim().toLowerCase()
+    // Mutually exclusive with Track Sides for the same exercise - see
+    // the note in enableTrackSides above.
+    if (targets[key]?.trackSides) {
+      await disableTrackSides(exerciseName)
+    }
+    setTargets((t) => ({ ...t, [key]: { ...t[key], perSide: true } }))
+    // Every existing set in this exercise is retroactively per-side too
+    // - matches how enableTrackSides seeds all existing sets, not just
+    // new ones going forward.
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.name.trim().toLowerCase() === key
+          ? { ...ex, sets: ex.sets.map((s) => ({ ...s, perSide: true })) }
+          : ex
+      )
+    )
+    touch()
+    try {
+      await setPerSide(user.id, exerciseName.trim(), true)
+    } catch { /* best effort - local state already updated */ }
+  }
+
+  async function disablePerSide(exerciseName) {
+    const key = exerciseName.trim().toLowerCase()
+    setTargets((t) => ({ ...t, [key]: { ...t[key], perSide: false } }))
+    setExercises((list) =>
+      list.map((ex) =>
+        ex.name.trim().toLowerCase() === key
+          ? { ...ex, sets: ex.sets.map((s) => ({ ...s, perSide: false })) }
+          : ex
+      )
+    )
+    touch()
+    try {
+      await setPerSide(user.id, exerciseName.trim(), false)
     } catch { /* best effort - local state already updated */ }
   }
   const dirtyRef = useRef(false)
@@ -555,6 +616,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         // feature once on an exercise made it silently reappear "on" in
         // every future session for that exercise, unasked.
         const sidesActive = Boolean(targetInfo?.trackSides)
+        const perSideActive = Boolean(targetInfo?.perSide)
         const targetReps = targetInfo?.reps || null
         const targetWeightRef = lastSession?.sets?.length
           ? lastSession.sets.reduce((max, s) => (s.weight != null && (!max || toKg(s.weight, s.unit) > toKg(max.weight, max.unit)) ? s : max), null)
@@ -691,7 +753,18 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               >
                 {sidesActive ? '✓ Tracking left/right' : 'Track left/right'}
               </button>
+              <button
+                className={`target-chip ${perSideActive ? '' : 'target-chip-empty'}`}
+                onClick={() => (perSideActive ? disablePerSide(ex.name) : maybeExplainThenEnablePerSide(ex.name))}
+              >
+                {perSideActive ? '✓ Per side weight' : 'Per side weight'}
+              </button>
             </div>
+            {perSideActive && (
+              <div className="field-hint" style={{ marginTop: -4, marginBottom: 8 }}>
+                Weight logged is per hand — volume is doubled automatically.
+              </div>
+            )}
           </div>
           )}
 
