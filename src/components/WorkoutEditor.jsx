@@ -797,7 +797,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     aria-label={s.warmup ? `Set ${i + 1}, warm-up — tap to unmark` : `Set ${i + 1} — tap to mark as warm-up`}
                     title={s.warmup ? 'Warm-up set' : 'Tap to mark as warm-up'}
                   >
-                    {s.warmup ? 'W' : i + 1}
+                    {s.warmup ? `W${i + 1}` : i + 1}
                   </button>
                   <input
                     className="input"
