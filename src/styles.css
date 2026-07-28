@@ -418,6 +418,14 @@ input[type='date'].input { color-scheme: dark; }
 
 .exercise-head .input { font-weight: 700; }
 
+.exercise-name-locked {
+  flex: 1;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink-dim);
+  padding: 12px;
+}
+
 .exercise-note-toggle {
   display: block;
   width: 100%;
