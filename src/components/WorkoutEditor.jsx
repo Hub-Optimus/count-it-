@@ -559,17 +559,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           ? validSets.reduce((best, st) => (Number(st.weight) > Number(best.weight) ? st : best), validSets[0])
           : null
         return (
-        <div className="exercise-block" key={ex.k}>
+        <div className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`} key={ex.k}>
           {ex.collapsed ? (
-            <div className="exercise-head">
+            <button className="exercise-collapsed-row" onClick={() => toggleCollapsed(ex.k)}>
               {ExPic && (
-                <span className="exercise-thumb" style={{ background: exColor + '26' }}>
-                  <ExPic width="30" height="30" />
+                <span className="exercise-thumb exercise-thumb-sm" style={{ background: exColor + '26' }}>
+                  <ExPic width="20" height="20" />
                 </span>
               )}
-              <div className="exercise-name-locked">{ex.name || `Exercise ${exIdx + 1}`}</div>
-            </div>
+              <span className="exercise-collapsed-text">
+                <span className="exercise-collapsed-name">{ex.name || `Exercise ${exIdx + 1}`}</span>
+                <span className="exercise-collapsed-meta">
+                  {validSets.length} set{validSets.length === 1 ? '' : 's'}
+                  {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
+                </span>
+              </span>
+              <span className="exercise-done-badge" aria-label="Marked done" title="Done — tap to edit">✓</span>
+              <span className="exercise-edit-hint">Edit</span>
+            </button>
           ) : (
+            <>
             <div className="exercise-head">
               {ExPic && (
                 <span className="exercise-thumb" style={{ background: exColor + '26' }}>
@@ -594,39 +603,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               )}
               <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
             </div>
-          )}
 
-          {!ex.collapsed && (
-            (ex.notes || ex.notesOpen) ? (
-              <textarea
-                className="input exercise-note"
-                placeholder="Note for this exercise (e.g. a twinge, a form cue, equipment used)"
-                value={ex.notes}
-                onChange={(e) => updateExercise(ex.k, { notes: e.target.value })}
-                rows={2}
-                name={`exercise-note-${sessionSalt}-${ex.k}`}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck="false"
-              />
-            ) : (
-              <button className="exercise-note-toggle" onClick={() => updateExercise(ex.k, { notesOpen: true })}>
-                + Note for this exercise
-              </button>
-            )
-          )}
-
-          {ex.collapsed ? (
-            <button className="exercise-summary" onClick={() => toggleCollapsed(ex.k)}>
-              <span className="small">
-                {validSets.length} set{validSets.length === 1 ? '' : 's'}
-                {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
-              </span>
-              <span className="small" style={{ color: 'var(--yellow)' }}>Edit</span>
-            </button>
+          {(ex.notes || ex.notesOpen) ? (
+            <textarea
+              className="input exercise-note"
+              placeholder="Note for this exercise (e.g. a twinge, a form cue, equipment used)"
+              value={ex.notes}
+              onChange={(e) => updateExercise(ex.k, { notes: e.target.value })}
+              rows={2}
+              name={`exercise-note-${sessionSalt}-${ex.k}`}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+            />
           ) : (
-          <>
+            <button className="exercise-note-toggle" onClick={() => updateExercise(ex.k, { notesOpen: true })}>
+              + Note for this exercise
+            </button>
+          )}
+
           {pickerFor === ex.k && (
             <ExercisePicker
               recentNames={exerciseNames}
