@@ -36,7 +36,7 @@ const nextKey = () => `k${++seq}`
 // Sets pre-filled from history behave exactly like any other set - no
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', restTarget: null, restActual: null })
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '' })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false })
 
 function historySet(histSet) {
@@ -48,10 +48,6 @@ function historySet(histSet) {
     perSide: Boolean(histSet.per_side),
     side: histSet.side || null,
     feel: '',
-    // A past session's rest period belongs to that session, not today's
-    // fresh set - always starts untracked regardless of what history says.
-    restTarget: null,
-    restActual: null,
   }
 }
 
@@ -70,8 +66,6 @@ function toModel(workout) {
       perSide: Boolean(s.per_side),
       side: s.side || null,
       feel: s.feel || '',
-      restTarget: s.rest_target_seconds ?? null,
-      restActual: s.rest_actual_seconds ?? null,
     })),
   }))
 }
@@ -113,64 +107,62 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // didn't, the original finished_at is preserved exactly as-is rather
   // than being recomputed from an untouched default value.
   const [durationTouched, setDurationTouched] = useState(false)
-  // Rest tracking is now silent, background bookkeeping only - no live
-  // countdown bar, no target to set/adjust, no beep. He found the visible
-  // countdown too intrusive; the useful part (the real Duration/Rest
-  // time/Active time numbers on past workouts) doesn't need a live
-  // display to work, just the start/end timestamps captured here.
-  const [rest, setRest] = useState(null)
+  // Rest-time tracking removed entirely per his explicit request - no
+  // background timestamping, no data collection, nothing. Just the
+  // Workout Duration field and the live session clock remain.
   const [, forceTick] = useState(0)
   // Flips true the first time genuinely new activity (a freshly typed
   // set, a freshly added exercise) is detected during THIS edit session -
-  // that's what makes the session clock reappear and resume from the
-  // workout's real start time, without it also reappearing just because
-  // an old workout was opened to fix a typo.
+  // that's what makes the session clock reappear, without it also
+  // reappearing just because an old workout was opened to fix a typo.
   const [liveActivityDetected, setLiveActivityDetected] = useState(!workout)
+  // What the workout's duration already was BEFORE this edit session
+  // reopened it - captured once at mount, from its real recorded
+  // timestamps. This is the anchor the live clock resumes from.
+  const [priorDurationSeconds] = useState(() => {
+    if (!workout?.started_at || !workout?.finished_at) return 0
+    const secs = Math.round((new Date(workout.finished_at) - new Date(workout.started_at)) / 1000)
+    return Number.isFinite(secs) && secs >= 0 ? secs : 0
+  })
+  // The clock's anchor is a VIRTUAL start time, not the real one - "now
+  // minus whatever duration was already recorded" - so it continues
+  // ticking up from exactly where it left off (e.g. 3:00) rather than
+  // counting the real gap since the original session (e.g. 47 minutes
+  // if he stepped away and came back). A break should never silently
+  // become part of the workout duration.
+  const [clockAnchorMs] = useState(() => (workout ? null : new Date(startedAt).getTime()))
+  const [resumedClockAnchorMs, setResumedClockAnchorMs] = useState(null)
+  const effectiveClockAnchorMs = clockAnchorMs ?? resumedClockAnchorMs
 
-  const sessionClockVisible = liveActivityDetected && Boolean(startedAt)
+  const sessionClockVisible = liveActivityDetected && effectiveClockAnchorMs != null
 
-  // Live session clock - ticks continuously once visible, continuing
-  // from the workout's real start time rather than resetting, so
-  // reopening a same-day session to add more to it resumes exactly
-  // where it left off instead of restarting from zero.
+  // Live session clock - ticks continuously once visible.
   useEffect(() => {
     if (!sessionClockVisible) return
     const id = setInterval(() => forceTick((t) => t + 1), 1000)
     return () => clearInterval(id)
   }, [sessionClockVisible])
 
-  const sessionElapsedSeconds = sessionClockVisible ? Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000) : 0
+  const sessionElapsedSeconds = sessionClockVisible ? Math.floor((Date.now() - effectiveClockAnchorMs) / 1000) : 0
 
-  function finalizeRest() {
-    if (!rest) return
-    const actualSeconds = Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000))
-    const { exK, setK } = rest
-    setExercises((list) =>
-      list.map((ex) =>
-        ex.k === exK
-          ? { ...ex, sets: ex.sets.map((s) => (s.k === setK ? { ...s, restTarget: null, restActual: actualSeconds } : s)) }
-          : ex
-      )
-    )
-    setRest(null)
-  }
-
-  function startRestFollowing(exK, setK) {
+  // Called the moment genuinely new activity is detected during an edit
+  // session - flips the clock on, anchored to skip the gap since the
+  // workout was originally finished.
+  function markLiveActivity() {
+    if (liveActivityDetected) return
     setLiveActivityDetected(true)
-    if (rest) finalizeRest()
-    setRest({ startedAt: Date.now(), exK, setK })
+    setResumedClockAnchorMs(Date.now() - priorDurationSeconds * 1000)
   }
 
   const [notes, setNotes] = useState(workout?.notes ?? '')
   const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
   // Snapshot of every set-key that existed the moment this editor opened
-  // - only meaningful when editing an already-saved workout. Lets the
-  // rest timer tell "genuinely new activity added during this edit"
-  // (a fresh exercise, a fresh set) apart from "old pre-existing data
-  // that just happens to look complete and untimed" - the same old-data
-  // case that caused the original spurious-timer bug. A key not in this
-  // set is unambiguously something typed or added just now, regardless
-  // of whether this is a brand-new session or an edit of an old one.
+  // - only meaningful when editing an already-saved workout. Lets us
+  // tell "genuinely new activity added during this edit" (a fresh
+  // exercise, a fresh set) apart from old pre-existing data that just
+  // happens to look complete. A key not in this set is unambiguously
+  // something typed or added just now, regardless of whether this is a
+  // brand-new session or an edit of an old one.
   const [preExistingSetKeys] = useState(() => {
     if (!workout) return null
     const keys = new Set()
@@ -327,7 +319,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     )
 
     if (!wasComplete && nowComplete && (!workout || !preExistingSetKeys.has(setK))) {
-      startRestFollowing(exK, setK)
+      markLiveActivity()
     }
   }
 
@@ -335,20 +327,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function addSet(exK) {
     touch()
-    setLiveActivityDetected(true)
-    // Tapping "+ Set" is the real "I just finished that set" signal for
-    // any set that arrived pre-filled (copied from the last one, or from
-    // history) rather than hand-typed - those never pass through
-    // updateSet's blank-to-filled detection, so without this they'd
-    // never get timed at all. Only fires if nothing's already timing
-    // that set (avoids double-triggering when it WAS hand-typed and
-    // already started a timer of its own).
-    const curEx = exercises.find((e) => e.k === exK)
-    const curLast = curEx?.sets[curEx.sets.length - 1]
-    const curLastComplete = Boolean(curLast && curLast.weight !== '' && curLast.reps !== '')
-    const curLastIsFresh = curLast && (!workout || !preExistingSetKeys.has(curLast.k))
-    const shouldStartRest = curLastComplete && !rest && curLast.restActual == null && curLastIsFresh
-
+    markLiveActivity()
     setExercises((list) =>
       list.map((ex) => {
         if (ex.k !== exK) return ex
@@ -360,7 +339,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           newSet = historySet(histNext)
         } else {
           newSet = last
-            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '', restTarget: null, restActual: null }
+            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '' }
             : blankSet(defaultUnit)
         }
         // Alternating takes priority over whatever history/copy suggested -
@@ -369,8 +348,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         return { ...ex, sets: [...ex.sets, newSet] }
       })
     )
-
-    if (shouldStartRest) startRestFollowing(exK, curLast.k)
   }
 
   function removeSet(exK, setK) {
@@ -380,7 +357,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function addExercise() {
     touch()
-    setLiveActivityDetected(true)
+    markLiveActivity()
     setExercises((list) => [...list, blankExercise(defaultUnit)])
   }
 
@@ -427,15 +404,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   async function save() {
     setError('')
 
-    // If a rest timer is still running at Finish time, its actual
-    // elapsed duration needs to land in THIS payload directly - going
-    // through finalizeRest's setExercises first wouldn't be reflected
-    // in `exercises` until next render, which is too late for the
-    // payload we're about to build right now.
-    const pendingRest = rest
-      ? { exK: rest.exK, setK: rest.setK, restActual: Math.max(0, Math.round((Date.now() - rest.startedAt) / 1000)) }
-      : null
-
     const payload = exercises
       .map((ex) => ({
         name: ex.name.trim(),
@@ -445,7 +413,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           .map((s) => {
             const w = s.weight === '' ? null : parseFloat(s.weight)
             const r = s.reps === '' ? null : parseInt(s.reps, 10)
-            const isPending = pendingRest && ex.k === pendingRest.exK && s.k === pendingRest.setK
             return {
               weight: Number.isFinite(w) ? w : null,
               unit: s.unit,
@@ -453,8 +420,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               perSide: s.perSide,
               side: s.side || null,
               feel: s.feel.trim() || null,
-              restTarget: isPending ? null : (s.restTarget ?? null),
-              restActual: isPending ? pendingRest.restActual : (s.restActual ?? null),
             }
           }),
       }))
@@ -488,7 +453,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       const body = { date, split: workout?.split ?? null, notes: notes.trim() || null, exercises: payload, startedAt: startedAtToSave, finishedAt: finishedAtToSave }
       if (workout) await updateFullWorkout(user.id, workout.id, body)
       else await insertFullWorkout(user.id, body)
-      if (rest) setRest(null)
       clearDraft()
       onSaved()
     } catch (e) {

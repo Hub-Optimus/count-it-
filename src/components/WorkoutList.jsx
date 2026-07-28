@@ -31,32 +31,6 @@ function durationMinutes(workout) {
   return Math.round(ms / 60000)
 }
 
-// A single rest that ran this long almost certainly wasn't actual rest -
-// got distracted, answered a call, etc. Excluded entirely from the sum
-// (not counted as rest, not counted toward the planned total either)
-// rather than trying to guess how much of it "really" was resting.
-const REST_ANOMALY_CUTOFF_SECONDS = 15 * 60
-
-// Sum of actual rest-timer durations across every set that had one
-// running, vs. what those timers were actually set to - the gap between
-// the two is genuine "extra" time beyond planned rest, not a guess.
-function restBreakdown(workout) {
-  let actual = 0
-  let target = 0
-  let any = false
-  for (const ex of workout.exercises) {
-    for (const set of ex.sets) {
-      if (set.rest_actual_seconds == null) continue
-      if (set.rest_actual_seconds > REST_ANOMALY_CUTOFF_SECONDS) continue
-      any = true
-      actual += set.rest_actual_seconds
-      target += set.rest_target_seconds ?? 0
-    }
-  }
-  if (!any) return null
-  return { actualMinutes: Math.round(actual / 60), targetMinutes: Math.round(target / 60) }
-}
-
 // First-appearance-ordered, deduped muscle groups actually trained in this session.
 function musclesFor(workout) {
   const seen = []
@@ -87,7 +61,6 @@ export default function WorkoutList({ workouts, onOpen }) {
         const muscles = musclesFor(w)
         const heading = w.split || (muscles.length ? muscles.join(' + ') : 'Workout')
         const mins = durationMinutes(w)
-        const rest = restBreakdown(w)
         return (
           <button key={w.id} className="workout-card" onClick={() => onOpen(w)}>
             <span className="wc-date">
@@ -102,7 +75,6 @@ export default function WorkoutList({ workouts, onOpen }) {
               {mins != null && (
                 <div className="wc-notes">
                   Duration: {formatDuration(mins)}
-                  {rest ? ` · Rest time: ${formatDuration(rest.actualMinutes)} · Active time: ${formatDuration(Math.max(0, mins - rest.actualMinutes))}` : ''}
                 </div>
               )}
               {w.split && muscles.length > 0 && <div className="wc-notes">{muscles.join(' + ')}</div>}
