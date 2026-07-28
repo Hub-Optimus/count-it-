@@ -569,7 +569,7 @@ input[type='date'].input { color-scheme: dark; }
 
 .set-row {
   display: grid;
-  grid-template-columns: 20px 1fr 52px 14px 72px 56px 30px;
+  grid-template-columns: 26px 1fr 52px 14px 72px 56px 30px;
   gap: 6px;
   align-items: center;
   margin-bottom: 6px;
