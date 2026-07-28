@@ -192,6 +192,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     return keys
   })
   const [draft, setDraft] = useState(() => readDraft(target))
+  // Whether he's ever used the warm-up toggle before, anywhere. Drives a
+  // plain-text hint shown under set 1 of every exercise UNTIL used once -
+  // visible up front, not something you only learn about after tapping
+  // blind and getting a popup. Disappears for good the first time he
+  // actually uses it, so it doesn't clutter the screen forever.
+  const [warmupHintSeen, setWarmupHintSeen] = useState(() => {
+    try { return Boolean(localStorage.getItem(WARMUP_INTRO_KEY)) } catch { return true }
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
@@ -406,16 +414,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   function toggleWarmup(exK, setK, currentWarmup) {
-    try {
-      if (!currentWarmup && !localStorage.getItem(WARMUP_INTRO_KEY)) {
-        window.alert(
-          'Mark a set as a warm-up by tapping its number.\n\n' +
-          'Warm-up sets are excluded from your Best, average, and volume totals for this exercise, so a light warm-up never skews those numbers.\n\n' +
-          'Tap the number again to unmark it.'
-        )
-        localStorage.setItem(WARMUP_INTRO_KEY, '1')
-      }
-    } catch { /* localStorage unavailable - skip the one-time explainer, not critical */ }
+    if (!warmupHintSeen) {
+      setWarmupHintSeen(true)
+      try { localStorage.setItem(WARMUP_INTRO_KEY, '1') } catch { /* not critical */ }
+    }
     updateSet(exK, setK, { warmup: !currentWarmup })
   }
 
@@ -848,6 +850,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   )}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>✕</button>
                 </div>
+                {i === 0 && !warmupHintSeen && (
+                  <div className="field-hint warmup-hint">
+                    Tap the number (currently "{i + 1}") to mark this set a warm-up — it won't count toward your Best, average, or volume.
+                  </div>
+                )}
                 <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
                   {customFeel ? (
