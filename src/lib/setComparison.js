@@ -34,7 +34,7 @@ export function bestSetEver(workouts, exerciseName, excludeWorkoutId) {
     for (const ex of w.exercises) {
       if (ex.name.trim().toLowerCase() !== nl) continue
       for (const s of ex.sets) {
-        if (s.weight == null || !s.reps) continue
+        if (s.weight == null || !s.reps || s.warmup) continue
         const kg = toKg(Number(s.weight), s.unit)
         const est = e1rmLocal(kg, s.reps)
         if (est > bestE1rm) {
@@ -59,7 +59,7 @@ export function averageRepsEver(workouts, exerciseName, excludeWorkoutId) {
     for (const ex of w.exercises) {
       if (ex.name.trim().toLowerCase() !== nl) continue
       for (const s of ex.sets) {
-        if (s.weight == null || !s.reps) continue
+        if (s.weight == null || !s.reps || s.warmup) continue
         total += Number(s.reps)
         count += 1
       }
@@ -81,7 +81,7 @@ export function averageWeightEver(workouts, exerciseName, excludeWorkoutId) {
     for (const ex of w.exercises) {
       if (ex.name.trim().toLowerCase() !== nl) continue
       for (const s of ex.sets) {
-        if (s.weight == null || !s.reps) continue
+        if (s.weight == null || !s.reps || s.warmup) continue
         total += toKg(Number(s.weight), s.unit)
         count += 1
       }

@@ -11,7 +11,7 @@ function volumeAndBestE1rm(workout) {
   let best = 0
   for (const ex of workout.exercises) {
     for (const s of ex.sets) {
-      if (s.weight == null || !s.reps) continue
+      if (s.weight == null || !s.reps || s.warmup) continue
       const kg = toKg(Number(s.weight), s.unit)
       const mult = volumeMultiplier(s)
       volume += kg * s.reps * mult
@@ -66,7 +66,7 @@ export function recentPRs(workouts, withinDays = 14, today = new Date()) {
     for (const ex of w.exercises) {
       let best = 0
       for (const s of ex.sets) {
-        if (s.weight == null || !s.reps) continue
+        if (s.weight == null || !s.reps || s.warmup) continue
         const est = e1rm(toKg(Number(s.weight), s.unit), s.reps)
         if (est > best) best = est
       }
