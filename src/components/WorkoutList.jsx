@@ -6,7 +6,7 @@ function volumeKg(workout) {
   let total = 0
   for (const ex of workout.exercises) {
     for (const set of ex.sets) {
-      if (set.weight == null || !set.reps) continue
+      if (set.weight == null || !set.reps || set.warmup) continue
       total += toKg(Number(set.weight), set.unit) * set.reps * volumeMultiplier(set)
     }
   }

@@ -18,7 +18,7 @@ function perWorkout(workouts) {
     let best1rm = 0
     for (const ex of w.exercises) {
       for (const s of ex.sets) {
-        if (s.weight == null || !s.reps) continue
+        if (s.weight == null || !s.reps || s.warmup) continue
         const kg = toKg(Number(s.weight), s.unit)
         const mult = volumeMultiplier(s)
         volume += kg * s.reps * mult

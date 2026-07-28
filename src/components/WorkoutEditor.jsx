@@ -42,6 +42,7 @@ const FEEL_VALUES = FEELS.map((f) => f.value)
 // explanation, so this fills that gap without adding permanent clutter.
 const SIDES_INTRO_KEY = 'countit_sides_intro_seen_v1'
 const PER_SIDE_INTRO_KEY = 'countit_per_side_intro_seen_v1'
+const WARMUP_INTRO_KEY = 'countit_warmup_intro_seen_v1'
 
 let seq = 0
 const nextKey = () => `k${++seq}`
@@ -49,7 +50,7 @@ const nextKey = () => `k${++seq}`
 // Sets pre-filled from history behave exactly like any other set - no
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '' })
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', warmup: false })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false })
 
 function historySet(histSet) {
@@ -61,6 +62,7 @@ function historySet(histSet) {
     perSide: Boolean(histSet.per_side),
     side: histSet.side || null,
     feel: '',
+    warmup: Boolean(histSet.warmup),
   }
 }
 
@@ -85,6 +87,7 @@ function toModel(workout) {
       perSide: Boolean(s.per_side),
       side: s.side || null,
       feel: s.feel || '',
+      warmup: Boolean(s.warmup),
     })),
   }))
 }
@@ -402,6 +405,20 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     }
   }
 
+  function toggleWarmup(exK, setK, currentWarmup) {
+    try {
+      if (!currentWarmup && !localStorage.getItem(WARMUP_INTRO_KEY)) {
+        window.alert(
+          'Mark a set as a warm-up by tapping its number.\n\n' +
+          'Warm-up sets are excluded from your Best, average, and volume totals for this exercise, so a light warm-up never skews those numbers.\n\n' +
+          'Tap the number again to unmark it.'
+        )
+        localStorage.setItem(WARMUP_INTRO_KEY, '1')
+      }
+    } catch { /* localStorage unavailable - skip the one-time explainer, not critical */ }
+    updateSet(exK, setK, { warmup: !currentWarmup })
+  }
+
   const oppositeSide = (s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null)
 
   function addSet(exK) {
@@ -418,7 +435,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           newSet = historySet(histNext)
         } else {
           newSet = last
-            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '' }
+            ? { k: nextKey(), weight: last.weight, unit: last.unit, reps: last.reps, perSide: last.perSide, side: last.side, feel: '', warmup: false }
             : blankSet(defaultUnit)
         }
         // Alternating takes priority over whatever history/copy suggested -
@@ -499,6 +516,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               perSide: s.perSide,
               side: s.side || null,
               feel: s.feel.trim() || null,
+              warmup: Boolean(s.warmup),
             }
           }),
       }))
@@ -773,7 +791,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             return (
               <div key={s.k}>
                 <div className="set-row">
-                  <span className="set-index">{i + 1}</span>
+                  <button
+                    className={`set-index ${s.warmup ? 'set-index-warmup' : ''}`}
+                    onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
+                    aria-label={s.warmup ? `Set ${i + 1}, warm-up — tap to unmark` : `Set ${i + 1} — tap to mark as warm-up`}
+                    title={s.warmup ? 'Warm-up set' : 'Tap to mark as warm-up'}
+                  >
+                    {s.warmup ? 'W' : i + 1}
+                  </button>
                   <input
                     className="input"
                     type="text"

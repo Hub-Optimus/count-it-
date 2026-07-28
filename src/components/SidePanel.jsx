@@ -34,7 +34,7 @@ export default function SidePanel({ workouts, profile }) {
         const g = groupFor(ex.name)
         if (g) groupsThisSession.add(g)
         for (const s of ex.sets) {
-          if (s.weight == null || !s.reps) continue
+          if (s.weight == null || !s.reps || s.warmup) continue
           const kg = toKg(Number(s.weight), s.unit)
           const mult = volumeMultiplier(s)
           const vol = kg * s.reps * mult

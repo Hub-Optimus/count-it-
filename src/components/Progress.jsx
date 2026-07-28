@@ -18,7 +18,7 @@ function buildStats(workouts) {
       let sawKg = false
       let sawLbs = false
       for (const s of ex.sets) {
-        if (s.weight == null) continue
+        if (s.weight == null || s.warmup) continue
         const kg = toKg(Number(s.weight), s.unit)
         if (s.unit === 'lbs') sawLbs = true
         else sawKg = true
