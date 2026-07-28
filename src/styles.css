@@ -398,6 +398,75 @@ input[type='date'].input { color-scheme: dark; }
   margin-bottom: 12px;
 }
 
+.exercise-block-collapsed {
+  padding: 8px 10px;
+}
+
+.exercise-collapsed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.exercise-thumb-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.exercise-collapsed-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.exercise-collapsed-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exercise-collapsed-meta {
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status badge, not a button - no hover/tap styling of its own, so it
+   never reads as something to tap. The whole row is the tap target. */
+.exercise-done-badge {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.exercise-edit-hint {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yellow);
+}
+
 .exercise-head {
   display: flex;
   gap: 8px;
@@ -417,14 +486,6 @@ input[type='date'].input { color-scheme: dark; }
 }
 
 .exercise-head .input { font-weight: 700; }
-
-.exercise-name-locked {
-  flex: 1;
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--ink-dim);
-  padding: 12px;
-}
 
 .exercise-note-toggle {
   display: block;
@@ -557,17 +618,6 @@ input[type='date'].input { color-scheme: dark; }
   border-color: var(--green);
   background: transparent;
   font-weight: 700;
-}
-
-.exercise-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  background: transparent;
-  border: none;
-  padding: 4px 0 2px;
-  min-height: 36px;
 }
 
 /* ---------- exercise picker overlay ---------- */
