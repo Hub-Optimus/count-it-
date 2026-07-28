@@ -560,48 +560,61 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           : null
         return (
         <div className="exercise-block" key={ex.k}>
-          <div className="exercise-head">
-            {ExPic && (
-              <span className="exercise-thumb" style={{ background: exColor + '26' }}>
-                <ExPic width="30" height="30" />
-              </span>
-            )}
-            <input
-              className="input"
-              placeholder={`Exercise ${exIdx + 1}`}
-              value={ex.name}
-              onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
-            />
-            <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
-              </svg>
-            </button>
-            {!ex.collapsed && ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
-              <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
-                ✓ Done
-              </button>
-            )}
-            <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
-          </div>
-
-          {(ex.notes || ex.notesOpen) ? (
-            <textarea
-              className="input exercise-note"
-              placeholder="Note for this exercise (e.g. a twinge, a form cue, equipment used)"
-              value={ex.notes}
-              onChange={(e) => updateExercise(ex.k, { notes: e.target.value })}
-              rows={2}
-              name={`exercise-note-${sessionSalt}-${ex.k}`}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck="false"
-            />
+          {ex.collapsed ? (
+            <div className="exercise-head">
+              {ExPic && (
+                <span className="exercise-thumb" style={{ background: exColor + '26' }}>
+                  <ExPic width="30" height="30" />
+                </span>
+              )}
+              <div className="exercise-name-locked">{ex.name || `Exercise ${exIdx + 1}`}</div>
+            </div>
           ) : (
-            <button className="exercise-note-toggle" onClick={() => updateExercise(ex.k, { notesOpen: true })}>
-              + Note for this exercise
-            </button>
+            <div className="exercise-head">
+              {ExPic && (
+                <span className="exercise-thumb" style={{ background: exColor + '26' }}>
+                  <ExPic width="30" height="30" />
+                </span>
+              )}
+              <input
+                className="input"
+                placeholder={`Exercise ${exIdx + 1}`}
+                value={ex.name}
+                onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
+              />
+              <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
+                </svg>
+              </button>
+              {ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
+                <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
+                  ✓ Done
+                </button>
+              )}
+              <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
+            </div>
+          )}
+
+          {!ex.collapsed && (
+            (ex.notes || ex.notesOpen) ? (
+              <textarea
+                className="input exercise-note"
+                placeholder="Note for this exercise (e.g. a twinge, a form cue, equipment used)"
+                value={ex.notes}
+                onChange={(e) => updateExercise(ex.k, { notes: e.target.value })}
+                rows={2}
+                name={`exercise-note-${sessionSalt}-${ex.k}`}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+              />
+            ) : (
+              <button className="exercise-note-toggle" onClick={() => updateExercise(ex.k, { notesOpen: true })}>
+                + Note for this exercise
+              </button>
+            )
           )}
 
           {ex.collapsed ? (
