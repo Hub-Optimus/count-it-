@@ -158,7 +158,7 @@ export async function deleteBodyMetric(id) {
 export async function fetchExerciseTargets(userId) {
   const { data, error } = await supabase
     .from('exercise_targets')
-    .select('exercise_name, target_reps, seed_weight, seed_weight_unit, track_sides')
+    .select('exercise_name, target_reps, seed_weight, seed_weight_unit, track_sides, per_side')
   if (error) throw error
   const map = {}
   for (const row of data ?? []) {
@@ -167,6 +167,7 @@ export async function fetchExerciseTargets(userId) {
       seedWeight: row.seed_weight,
       seedWeightUnit: row.seed_weight_unit,
       trackSides: Boolean(row.track_sides),
+      perSide: Boolean(row.per_side),
     }
   }
   return map
@@ -189,5 +190,13 @@ export async function setTrackSides(userId, exerciseName, trackSides) {
   const { error } = await supabase
     .from('exercise_targets')
     .upsert({ user_id: userId, exercise_name: exerciseName, track_sides: trackSides, updated_at: new Date().toISOString() })
+  if (error) throw error
+}
+
+// Same partial-upsert pattern as setTrackSides - only touches per_side.
+export async function setPerSide(userId, exerciseName, perSide) {
+  const { error } = await supabase
+    .from('exercise_targets')
+    .upsert({ user_id: userId, exercise_name: exerciseName, per_side: perSide, updated_at: new Date().toISOString() })
   if (error) throw error
 }
