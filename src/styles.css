@@ -702,23 +702,44 @@ input[type='date'].input { color-scheme: dark; }
 
 .editor-topbar .screen-title { margin: 0; font-size: 22px; }
 
-.session-clock {
+.workout-time-card {
   position: sticky;
   top: 60px;
   z-index: 4;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 12px;
   background: var(--card-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 10px 14px;
+  padding: 12px 14px;
   margin-bottom: 12px;
 }
 
-.session-clock-dot {
-  width: 8px;
-  height: 8px;
+.workout-time-icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ink-faint);
+}
+
+.workout-time-live .workout-time-icon { color: var(--yellow); }
+
+.workout-time-body { flex: 1; min-width: 0; }
+
+.workout-time-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.workout-time-dot {
+  width: 7px;
+  height: 7px;
   flex: none;
   border-radius: 50%;
   background: var(--red);
@@ -730,20 +751,14 @@ input[type='date'].input { color-scheme: dark; }
   50% { opacity: 0.25; }
 }
 
-.session-clock-label {
-  flex: 1;
-  font-size: 11px;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.session-clock-time {
+.workout-time-value {
   font-family: var(--display);
   font-size: 24px;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
+
+.workout-time-input { max-width: 160px; }
 
 .banner {
   display: flex;
