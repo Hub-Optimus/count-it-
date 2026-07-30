@@ -84,6 +84,30 @@ button { cursor: pointer; }
   display: block;
 }
 
+.version-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  background: color-mix(in srgb, var(--yellow) 18%, var(--bg-deep));
+  border-bottom: 1px solid var(--yellow);
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.version-banner-btn {
+  width: auto;
+  flex: none;
+  min-height: 32px;
+  padding: 4px 14px;
+  font-size: 12.5px;
+}
+
 .side-panel { display: none; }
 
 

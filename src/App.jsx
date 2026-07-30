@@ -16,6 +16,14 @@ import SidePanel from './components/SidePanel'
 
 const UNIT_KEY = 'countit-unit'
 
+// Reads which JS bundle THIS loaded page is actually running, straight
+// from the DOM - no separate version file to remember to update on
+// every deploy, since Vite already stamps a fresh content hash into
+// this filename on every single build automatically.
+function currentBundleSrc() {
+  return document.querySelector('script[src*="/assets/index-"]')?.src ?? null
+}
+
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still checking
 
@@ -24,6 +32,36 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
     return () => subscription.unsubscribe()
+  }, [])
+
+  // Lets him and any other user know, right in the app, when they're
+  // running an older build than what's actually live - no more silent
+  // "why does this work for you and not me" mismatches. Checks every
+  // 5 minutes and immediately whenever the tab regains focus (catches
+  // the common case of leaving a tab open for hours), comparing the
+  // currently-loaded bundle against whatever the server is serving
+  // right now. Never auto-reloads on its own - a mid-set page refresh
+  // he didn't ask for would be its own kind of data-loss risk.
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false)
+  useEffect(() => {
+    const mine = currentBundleSrc()
+    if (!mine) return // dev server or unexpected markup - nothing reliable to compare
+    async function check() {
+      try {
+        const res = await fetch('/', { cache: 'no-store' })
+        const html = await res.text()
+        const match = html.match(/src="(\/assets\/index-[^"]+\.js)"/)
+        if (match && !mine.endsWith(match[1])) setNewVersionAvailable(true)
+      } catch { /* offline or a network hiccup - just try again next interval */ }
+    }
+    check()
+    const interval = setInterval(check, 5 * 60 * 1000)
+    const onVisible = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   if (!configured) {
@@ -205,6 +243,14 @@ function Main({ user }) {
 
   return (
     <div className="app-shell">
+      {newVersionAvailable && (
+        <div className="version-banner">
+          <span>A newer version of Count It is available.</span>
+          <button className="btn btn-block version-banner-btn" onClick={() => window.location.reload()}>
+            Refresh to update
+          </button>
+        </div>
+      )}
       <TabBar tab={tab} onChange={setTab} user={user} sessionCount={workouts?.length} />
       <div className="app">
       <header className="app-header">
