@@ -779,6 +779,12 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
             return (
               <div key={s.k}>
+                <button
+                  className={`chip warmup-chip ${s.warmup ? 'on' : ''}`}
+                  onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
+                >
+                  {s.warmup ? '✓ Warm-up set' : 'Warm-up set?'}
+                </button>
                 <div className="set-row">
                   <span className={`set-index ${s.warmup ? 'set-index-warmup' : ''}`}>
                     {s.warmup ? `W${i + 1}` : i + 1}
@@ -853,12 +859,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     ))
                   )}
                 </div>
-                <button
-                  className={`chip warmup-chip ${s.warmup ? 'on' : ''}`}
-                  onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
-                >
-                  {s.warmup ? '✓ Warm-up set' : 'Warm-up set?'}
-                </button>
               </div>
             )
           })}
