@@ -42,7 +42,6 @@ const FEEL_VALUES = FEELS.map((f) => f.value)
 // explanation, so this fills that gap without adding permanent clutter.
 const SIDES_INTRO_KEY = 'countit_sides_intro_seen_v1'
 const PER_SIDE_INTRO_KEY = 'countit_per_side_intro_seen_v1'
-const WARMUP_INTRO_KEY = 'countit_warmup_intro_seen_v1'
 
 let seq = 0
 const nextKey = () => `k${++seq}`
@@ -192,14 +191,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     return keys
   })
   const [draft, setDraft] = useState(() => readDraft(target))
-  // Whether he's ever used the warm-up toggle before, anywhere. Drives a
-  // plain-text hint shown under set 1 of every exercise UNTIL used once -
-  // visible up front, not something you only learn about after tapping
-  // blind and getting a popup. Disappears for good the first time he
-  // actually uses it, so it doesn't clutter the screen forever.
-  const [warmupHintSeen, setWarmupHintSeen] = useState(() => {
-    try { return Boolean(localStorage.getItem(WARMUP_INTRO_KEY)) } catch { return true }
-  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
@@ -414,10 +405,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   function toggleWarmup(exK, setK, currentWarmup) {
-    if (!warmupHintSeen) {
-      setWarmupHintSeen(true)
-      try { localStorage.setItem(WARMUP_INTRO_KEY, '1') } catch { /* not critical */ }
-    }
     updateSet(exK, setK, { warmup: !currentWarmup })
   }
 
@@ -794,7 +781,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               <div key={s.k}>
                 <div className="set-row">
                   <button
-                    className={`set-index ${s.warmup ? 'set-index-warmup' : ''} ${i === 0 && !warmupHintSeen ? 'set-index-hint' : ''}`}
+                    className={`set-index ${s.warmup ? 'set-index-warmup' : ''} ${i === 0 && !s.warmup ? 'set-index-hint' : ''}`}
                     onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
                     aria-label={s.warmup ? `Set ${i + 1}, warm-up — tap to unmark` : `Set ${i + 1} — tap to mark as warm-up`}
                     title={s.warmup ? 'Warm-up set' : 'Tap to mark as warm-up'}
