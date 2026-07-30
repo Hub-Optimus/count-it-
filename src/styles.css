@@ -580,44 +580,29 @@ input[type='date'].input { color-scheme: dark; }
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
   text-align: center;
-  background: transparent;
-  border: 1px dashed var(--line);
-  border-radius: 6px;
-  font-family: inherit;
-  cursor: pointer;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px 2px;
+  display: block;
 }
 
 .set-index-warmup {
   color: var(--blue);
   font-weight: 700;
-  border-style: solid;
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 16%, transparent);
 }
 
-/* Motion, not text, does the discovery work here - a gently pulsing
-   glow reads as "look here, this is interactive" without needing to be
-   read, the same way the live session clock's dot already does
-   elsewhere in this app. Deliberately permanent (not a one-time thing) -
-   a cue that only ever shows once can be missed forever if someone
-   isn't looking at that exact moment. Every unmarked first set gets it,
-   every time - stops only once THAT set is actually marked. */
-.set-index-hint {
-  color: var(--blue);
-  border-color: var(--blue);
-  animation: set-index-pulse 1.8s ease-in-out infinite;
+/* The real warm-up toggle - a plain labeled chip, same visual language
+   as the feel-chips right above it, which have never once been
+   confusing. Motion and shape-only cues both fell short of actually
+   explaining what the control does; only real words did. */
+.warmup-chip {
+  margin-top: 8px;
+  font-size: 12.5px;
+  padding: 5px 11px;
+  min-height: 30px;
 }
 
-@keyframes set-index-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--blue) 55%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 5px color-mix(in srgb, var(--blue) 0%, transparent);
-  }
+.warmup-chip.on {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #060d1c;
 }
 
 .set-row .input {
