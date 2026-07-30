@@ -601,8 +601,10 @@ input[type='date'].input { color-scheme: dark; }
 /* Motion, not text, does the discovery work here - a gently pulsing
    glow reads as "look here, this is interactive" without needing to be
    read, the same way the live session clock's dot already does
-   elsewhere in this app. Stops forever the instant it's tapped once,
-   anywhere - see warmupHintSeen. */
+   elsewhere in this app. Deliberately permanent (not a one-time thing) -
+   a cue that only ever shows once can be missed forever if someone
+   isn't looking at that exact moment. Every unmarked first set gets it,
+   every time - stops only once THAT set is actually marked. */
 .set-index-hint {
   color: var(--blue);
   border-color: var(--blue);
