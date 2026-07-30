@@ -18,13 +18,18 @@ export default function Settings({ user, workouts, defaultUnit, onUnitChange, pr
         date: w.date,
         split: w.split,
         notes: w.notes,
+        started_at: w.started_at,
+        finished_at: w.finished_at,
         exercises: w.exercises.map((ex) => ({
           name: ex.name,
+          notes: ex.notes,
           sets: ex.sets.map((s) => ({
             weight: s.weight,
             unit: s.unit,
             reps: s.reps,
             per_side: s.per_side,
+            side: s.side,
+            warmup: s.warmup,
             feel: s.feel,
           })),
         })),
