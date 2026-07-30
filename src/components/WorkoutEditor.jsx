@@ -115,7 +115,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // a fresh "right now" timestamp just because the workout is being
   // opened, or every old workout would falsely look like it took ~0
   // minutes the instant you edited anything else on it.
-  const [startedAt] = useState(() => (workout ? (workout.started_at ?? null) : new Date().toISOString()))
+  const [startedAt, setStartedAt] = useState(() => (workout ? (workout.started_at ?? null) : new Date().toISOString()))
   // Workout Duration, edited as a simple hour:minute clock picker rather
   // than a bare number - "1:30" reads instantly, "90" makes you do math.
   // Only ever shown for an already-saved workout being reopened.
@@ -151,7 +151,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // counting the real gap since the original session (e.g. 47 minutes
   // if he stepped away and came back). A break should never silently
   // become part of the workout duration.
-  const [clockAnchorMs] = useState(() => (workout ? null : new Date(startedAt).getTime()))
+  const [clockAnchorMs, setClockAnchorMs] = useState(() => (workout ? null : new Date(startedAt).getTime()))
   const [resumedClockAnchorMs, setResumedClockAnchorMs] = useState(null)
   const effectiveClockAnchorMs = clockAnchorMs ?? resumedClockAnchorMs
 
@@ -336,7 +336,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     if (!dirtyRef.current) return
     const t = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, notes, exercises, ts: Date.now() }))
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, notes, exercises, startedAt, ts: Date.now() }))
       } catch { /* storage full - draft is best effort */ }
     }, 350)
     return () => clearTimeout(t)
@@ -346,6 +346,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setDate(draft.date)
     setNotes(draft.notes)
     setExercises(draft.exercises.map((ex) => ({ ...ex, k: nextKey(), sets: ex.sets.map((s) => ({ ...s, k: nextKey() })) })))
+    // The clock previously had no way to reflect a resumed session's
+    // real start time - it was locked in at page-load the instant this
+    // component mounted, before Resume was ever tapped. Restoring both
+    // together is what actually fixes the "starts from 0" bug, not just
+    // bringing the sets back.
+    if (draft.startedAt) {
+      setStartedAt(draft.startedAt)
+      setClockAnchorMs(new Date(draft.startedAt).getTime())
+    }
     dirtyRef.current = true
     setDraft(null)
   }
