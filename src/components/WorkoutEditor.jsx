@@ -780,14 +780,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             return (
               <div key={s.k}>
                 <div className="set-row">
-                  <button
-                    className={`set-index ${s.warmup ? 'set-index-warmup' : ''} ${i === 0 && !s.warmup ? 'set-index-hint' : ''}`}
-                    onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
-                    aria-label={s.warmup ? `Set ${i + 1}, warm-up — tap to unmark` : `Set ${i + 1} — tap to mark as warm-up`}
-                    title={s.warmup ? 'Warm-up set' : 'Tap to mark as warm-up'}
-                  >
+                  <span className={`set-index ${s.warmup ? 'set-index-warmup' : ''}`}>
                     {s.warmup ? `W${i + 1}` : i + 1}
-                  </button>
+                  </span>
                   <input
                     className="input"
                     type="text"
@@ -858,6 +853,12 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     ))
                   )}
                 </div>
+                <button
+                  className={`chip warmup-chip ${s.warmup ? 'on' : ''}`}
+                  onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
+                >
+                  {s.warmup ? '✓ Warm-up set' : 'Warm-up set?'}
+                </button>
               </div>
             )
           })}
