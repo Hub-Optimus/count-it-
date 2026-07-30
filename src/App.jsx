@@ -34,36 +34,6 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Lets him and any other user know, right in the app, when they're
-  // running an older build than what's actually live - no more silent
-  // "why does this work for you and not me" mismatches. Checks every
-  // 5 minutes and immediately whenever the tab regains focus (catches
-  // the common case of leaving a tab open for hours), comparing the
-  // currently-loaded bundle against whatever the server is serving
-  // right now. Never auto-reloads on its own - a mid-set page refresh
-  // he didn't ask for would be its own kind of data-loss risk.
-  const [newVersionAvailable, setNewVersionAvailable] = useState(false)
-  useEffect(() => {
-    const mine = currentBundleSrc()
-    if (!mine) return // dev server or unexpected markup - nothing reliable to compare
-    async function check() {
-      try {
-        const res = await fetch('/', { cache: 'no-store' })
-        const html = await res.text()
-        const match = html.match(/src="(\/assets\/index-[^"]+\.js)"/)
-        if (match && !mine.endsWith(match[1])) setNewVersionAvailable(true)
-      } catch { /* offline or a network hiccup - just try again next interval */ }
-    }
-    check()
-    const interval = setInterval(check, 5 * 60 * 1000)
-    const onVisible = () => { if (document.visibilityState === 'visible') check() }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [])
-
   if (!configured) {
     return (
       <div className="auth-wrap">
@@ -99,6 +69,36 @@ function Main({ user }) {
   const [editor, setEditor] = useState(null) // null | { workout: null } | { workout }
   const [defaultUnit, setDefaultUnit] = useState(() => localStorage.getItem(UNIT_KEY) || 'kg')
   const [profile, setProfile] = useState(undefined) // undefined = loading, null = needs onboarding
+
+  // Lets him and any other user know, right in the app, when they're
+  // running an older build than what's actually live - no more silent
+  // "why does this work for you and not me" mismatches. Checks every
+  // 5 minutes and immediately whenever the tab regains focus (catches
+  // the common case of leaving a tab open for hours), comparing the
+  // currently-loaded bundle against whatever the server is serving
+  // right now. Never auto-reloads on its own - a mid-set page refresh
+  // he didn't ask for would be its own kind of data-loss risk.
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false)
+  useEffect(() => {
+    const mine = currentBundleSrc()
+    if (!mine) return // dev server or unexpected markup - nothing reliable to compare
+    async function check() {
+      try {
+        const res = await fetch('/', { cache: 'no-store' })
+        const html = await res.text()
+        const match = html.match(/src="(\/assets\/index-[^"]+\.js)"/)
+        if (match && !mine.endsWith(match[1])) setNewVersionAvailable(true)
+      } catch { /* offline or a network hiccup - just try again next interval */ }
+    }
+    check()
+    const interval = setInterval(check, 5 * 60 * 1000)
+    const onVisible = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
 
   // Right after a fresh sign-in, the very first request can occasionally
   // race a brand-new token before Supabase's clock-skew correction has
