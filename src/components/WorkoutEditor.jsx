@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide } from '../lib/db'
 import { todayISO, toKg } from '../lib/format'
-import ExercisePicker from './ExercisePicker'
 import { pictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
@@ -205,7 +204,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }, [autoResumeDraft, draft])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
   // Which exercise's name field currently has a live-suggestions
   // dropdown open beneath it - only ever one at a time.
   const [suggestFor, setSuggestFor] = useState(null)
@@ -692,11 +690,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 onFocus={() => { if (ex.name.trim()) setSuggestFor(ex.k) }}
                 onBlur={() => setTimeout(() => setSuggestFor((cur) => (cur === ex.k ? null : cur)), 150)}
               />
-              <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
-                </svg>
-              </button>
               {ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
                 <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
                   ✓ Done
@@ -747,14 +740,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             <button className="exercise-note-toggle" onClick={() => updateExercise(ex.k, { notesOpen: true })}>
               + Note for this exercise
             </button>
-          )}
-
-          {pickerFor === ex.k && (
-            <ExercisePicker
-              recentNames={exerciseNames}
-              onSelect={(name) => updateExercise(ex.k, { name })}
-              onClose={() => setPickerFor(null)}
-            />
           )}
 
           {readyToProgress && (
