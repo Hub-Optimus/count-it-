@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide, saveTemplate } from '../lib/db'
-import { todayISO, toKg } from '../lib/format'
+import { todayISO, toKg, fmtDate } from '../lib/format'
 import { pictogramFor, exactPictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
@@ -731,7 +731,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
         const avgReps = ex.name.trim() ? averageRepsEver(workouts, ex.name, workout?.id) : null
         const avgWeight = ex.name.trim() ? averageWeightEver(workouts, ex.name, workout?.id) : null
-        const targetInfo = targets[ex.name.trim().toLowerCase()] || null
+        const targetInfo = ex.name.trim() ? targets[ex.name.trim().toLowerCase()] || null : null
         // Sides tracking is only ever on because the user deliberately
         // turned it on for this exercise (persisted trackSides flag) -
         // never inferred from a stray leftover `side` value carried in
@@ -912,7 +912,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               ) : <span className="small">No history for this exercise yet</span>}
               {lastSession && (
                 <span className="small">
-                  Last time: {lastSession.sets.map((s, idx) => (
+                  Last time ({fmtDate(lastSession.date)}): {lastSession.sets.map((s, idx) => (
                     <span key={idx}>{idx > 0 ? ', ' : ''}{s.weight ?? '–'}{s.unit === 'lbs' ? 'lb' : 'kg'}×{s.reps ?? '–'}</span>
                   ))}
                 </span>
@@ -1016,11 +1016,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   />
                   {sidesActive ? (
                     <button
-                      className={`mini-btn side-btn on ${s.side === 'R' ? 'side-r' : 'side-l'}`}
+                      className={`mini-btn side-btn ${s.side ? `on ${s.side === 'R' ? 'side-r' : 'side-l'}` : 'side-unset'}`}
                       onClick={() => updateSet(ex.k, s.k, { side: s.side === 'R' ? 'L' : 'R' })}
-                      aria-label={`Side: ${s.side === 'R' ? 'right' : 'left'} — tap to switch`}
+                      aria-label={s.side ? `Side: ${s.side === 'R' ? 'right' : 'left'} — tap to switch` : 'Side not set — tap to choose left or right'}
                     >
-                      {s.side === 'R' ? 'R' : 'L'}
+                      {s.side || '?'}
                     </button>
                   ) : (
                     <span className="side-slot-spacer" aria-hidden="true" />
