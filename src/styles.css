@@ -561,6 +561,21 @@ input[type='date'].input { color-scheme: dark; }
 .name-suggestion-row:last-child { border-bottom: none; }
 .name-suggestion-row:active { background: var(--card); }
 
+.name-suggestion-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+}
+
+.name-suggestion-icon-dot { width: 10px; height: 10px; margin: 8px; border-radius: 50%; }
+
+.name-suggestion-text { flex: 1; min-width: 0; }
+
 .name-suggestion-exact {
   flex: none;
   font-size: 10.5px;
