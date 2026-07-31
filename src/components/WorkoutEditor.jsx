@@ -96,7 +96,7 @@ function readDraft(target) {
   return d && d.target === target ? d : null
 }
 
-export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, onClose, onSaved }) {
+export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, autoResumeDraft, onClose, onSaved }) {
   const target = workout?.id ?? 'new'
   // The k1/k2/... exercise keys are the same on every single page load
   // (the counter restarts each time), so a name built only from them is
@@ -191,6 +191,18 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     return keys
   })
   const [draft, setDraft] = useState(() => readDraft(target))
+  // He already decided to resume once, from the dashboard-level confirm
+  // or banner - asking again in here, with its own separate Resume
+  // button, would just be making him confirm the same decision twice.
+  // Runs once, right after mount, only when there's actually a draft
+  // AND the dashboard explicitly signaled this was a confirmed resume.
+  const autoResumedRef = useRef(false)
+  useEffect(() => {
+    if (autoResumeDraft && draft && !autoResumedRef.current) {
+      autoResumedRef.current = true
+      resumeDraft()
+    }
+  }, [autoResumeDraft, draft])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
@@ -592,7 +604,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         </div>
       )}
 
-      {draft && (
+      {draft && !autoResumeDraft && (
         <div className="banner">
           <span>You have an unsaved draft from this device.</span>
           <span className="banner-actions">
