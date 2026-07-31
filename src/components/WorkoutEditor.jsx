@@ -682,14 +682,19 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   <ExPic width="30" height="30" />
                 </span>
               )}
-              <input
-                className="input"
-                placeholder={`Exercise ${exIdx + 1}`}
-                value={ex.name}
-                onChange={(e) => { updateExercise(ex.k, { name: e.target.value }); setSuggestFor(ex.k) }}
-                onFocus={() => { if (ex.name.trim()) setSuggestFor(ex.k) }}
-                onBlur={() => setTimeout(() => setSuggestFor((cur) => (cur === ex.k ? null : cur)), 150)}
-              />
+              <div className="name-input-wrap">
+                <svg className="name-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
+                </svg>
+                <input
+                  className="input name-input"
+                  placeholder="Search or type exercise"
+                  value={ex.name}
+                  onChange={(e) => { updateExercise(ex.k, { name: e.target.value }); setSuggestFor(ex.k) }}
+                  onFocus={() => { if (ex.name.trim()) setSuggestFor(ex.k) }}
+                  onBlur={() => setTimeout(() => setSuggestFor((cur) => (cur === ex.k ? null : cur)), 150)}
+                />
+              </div>
               {ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
                 <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
                   ✓ Done
