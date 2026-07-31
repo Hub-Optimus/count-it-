@@ -639,7 +639,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         // showing an icon prematurely (before a real selection) is
         // actually misleading.
         const CollapsedPic = PICTOGRAMS[pictogramFor(ex.name)]
-        const ExPic = PICTOGRAMS[exactPictogramFor(ex.name)]
+        // Strict (exact-only) matching only matters while actively
+        // searching right now - that's the one moment where showing an
+        // icon could misleadingly imply "this is confirmed" before it
+        // is. Once the dropdown isn't open, this is just an already-set
+        // name (freshly picked, typed in full, or reopened from
+        // history) and the loose match is correct, same as the
+        // collapsed view.
+        const ExPic = PICTOGRAMS[suggestFor === ex.k ? exactPictogramFor(ex.name) : pictogramFor(ex.name)]
         const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
