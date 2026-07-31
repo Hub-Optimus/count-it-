@@ -752,6 +752,52 @@ input[type='date'].input { color-scheme: dark; }
   align-items: flex-end;
 }
 
+.template-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(8, 9, 11, 0.7);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.template-picker {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+  width: 100%;
+  max-width: 480px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.template-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.template-picker-header h2 { font-size: 16px; margin: 0; }
+
+.template-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 4px;
+}
+
+.template-picker-name { font-weight: 700; color: var(--ink); }
+.template-picker-count { font-size: 12.5px; color: var(--ink-faint); }
+.template-picker-blank { margin-top: 12px; }
+
 .picker-sheet {
   background: var(--bg);
   border-top: 1px solid var(--line);
