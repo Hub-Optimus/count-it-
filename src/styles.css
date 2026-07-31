@@ -518,6 +518,23 @@ input[type='date'].input { color-scheme: dark; }
 
 .exercise-head .input { font-weight: 700; }
 
+.name-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.name-input-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.name-input { padding-left: 36px; }
+
 .name-suggestions {
   background: var(--card-2);
   border: 1px solid var(--line);
