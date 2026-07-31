@@ -202,3 +202,26 @@ export async function setPerSide(userId, exerciseName, perSide) {
     .upsert({ user_id: userId, exercise_name: exerciseName, per_side: perSide, updated_at: new Date().toISOString() })
   if (error) throw error
 }
+
+// ---- templates (named, reusable exercise lists - no locked-in numbers) ----
+
+export async function fetchTemplates(userId) {
+  const { data, error } = await supabase
+    .from('templates')
+    .select('id, name, exercise_names, created_at')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((t) => ({ id: t.id, name: t.name, exerciseNames: t.exercise_names }))
+}
+
+export async function saveTemplate(userId, name, exerciseNames) {
+  const { error } = await supabase
+    .from('templates')
+    .insert({ user_id: userId, name, exercise_names: exerciseNames })
+  if (error) throw error
+}
+
+export async function deleteTemplate(id) {
+  const { error } = await supabase.from('templates').delete().eq('id', id)
+  if (error) throw error
+}
