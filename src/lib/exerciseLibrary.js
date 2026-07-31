@@ -3,6 +3,7 @@
 // precise target-muscle data (not guessed from the name). Only the free MIT-licensed
 // metadata is used here — the dataset's GIFs/images are (c) Gym visual, a separate
 // commercial license, and are NOT included or referenced anywhere in this app.
+import Fuse from 'fuse.js'
 
 export const GROUPS = ['Chest', 'Back', 'Shoulders', 'Legs', 'Biceps', 'Triceps', 'Core', 'Cardio']
 
@@ -1412,4 +1413,28 @@ export const GROUP_COLOR = {
   Core: '#ff9f5b',
   Cardio: '#f06fa8',
   Other: '#767b84',
+}
+
+// Single shared fuzzy-search config, used everywhere exercises are
+// searched (the live-suggest field and the full browse picker), so
+// both always agree on what counts as a match.
+//
+// tokenMatch: 'any' (not 'all') is the important part here - 'all'
+// required EVERY word typed to closely match something in the name,
+// which quietly punished normal, imprecise phrasing (nobody remembers
+// the exact 3-4 word canonical name). 'any' finds a match as long as
+// the meaningful words line up, which is how people actually type
+// when searching from memory.
+let _fuse = null
+export function searchExercises(query) {
+  if (!_fuse) {
+    _fuse = new Fuse(EXERCISES, {
+      keys: ['name'],
+      threshold: 0.32,
+      ignoreLocation: true,
+      useTokenSearch: true,
+      tokenMatch: 'any',
+    })
+  }
+  return _fuse.search(query).map((r) => r.item)
 }
