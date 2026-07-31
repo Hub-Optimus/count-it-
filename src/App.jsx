@@ -194,7 +194,7 @@ function Main({ user }) {
         `Press OK to resume it, or Cancel to start a separate new session.`
       )
       if (resumeIt) {
-        setEditor({ workout: target })
+        setEditor({ workout: target, autoResumeDraft: true })
         return
       }
     }
@@ -233,6 +233,7 @@ function Main({ user }) {
         workouts={workouts ?? []}
         exerciseNames={exerciseNames}
         defaultUnit={defaultUnit}
+        autoResumeDraft={Boolean(editor.autoResumeDraft)}
         onClose={() => setEditor(null)}
         onSaved={() => { setEditor(null); load() }}
       />
@@ -280,7 +281,7 @@ function Main({ user }) {
                   <button className="btn btn-ghost" onClick={() => setDraftBanner(null)}>Dismiss</button>
                   <button className="btn" onClick={() => {
                     const target = draftBanner.target === 'new' ? null : (workouts.find((w) => w.id === draftBanner.target) || null)
-                    setEditor({ workout: target })
+                    setEditor({ workout: target, autoResumeDraft: true })
                   }}>Resume</button>
                 </span>
               </div>
