@@ -396,14 +396,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setDate(draft.date)
     setNotes(draft.notes)
     setExercises(draft.exercises.map((ex) => ({ ...ex, k: nextKey(), sets: ex.sets.map((s) => ({ ...s, k: nextKey() })) })))
-    // The clock previously had no way to reflect a resumed session's
-    // real start time - it was locked in at page-load the instant this
-    // component mounted, before Resume was ever tapped. Restoring both
-    // together is what actually fixes the "starts from 0" bug, not just
-    // bringing the sets back.
+    // The clock has two parts: WHERE it's anchored, and WHETHER it's
+    // even visible/ticking at all (liveActivityDetected - false by
+    // default for an existing workout). Restoring only the anchor
+    // fixed the "resumes from 0" bug for a brand new session, but for
+    // reopening an EXISTING workout, the clock stayed hidden until some
+    // unrelated new activity happened to flip liveActivityDetected on
+    // its own - which is why it only "worked" after adding another
+    // exercise. Resuming a draft always means real activity WAS
+    // happening, so this now turns the clock on directly, matching
+    // exactly what markLiveActivity() would have done.
     if (draft.startedAt) {
       setStartedAt(draft.startedAt)
       setClockAnchorMs(new Date(draft.startedAt).getTime())
+      setLiveActivityDetected(true)
+    } else {
+      // Older draft saved before startedAt was tracked - no precise
+      // original start time to restore, so fall back to the same
+      // mechanism already used for "reopen a same-day session and add
+      // new activity". Less precise, but still correct and live.
+      markLiveActivity()
     }
     dirtyRef.current = true
     setDraft(null)
