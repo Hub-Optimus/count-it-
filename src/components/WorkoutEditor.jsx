@@ -630,6 +630,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
       <div className="exercise-grid">
       {exercises.map((ex, exIdx) => {
+        // Collapsed exercises are already-saved, done data - there's no
+        // "is this confirmed yet" ambiguity, so the loose keyword-based
+        // lookup is correct here (handles minor real-world variations
+        // like "Lateral Raise (Machine)" that don't exactly match the
+        // canonical library string). The live-editing header uses the
+        // strict exact-only version instead, since THAT'S the one where
+        // showing an icon prematurely (before a real selection) is
+        // actually misleading.
+        const CollapsedPic = PICTOGRAMS[pictogramFor(ex.name)]
         const ExPic = PICTOGRAMS[exactPictogramFor(ex.name)]
         const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
@@ -659,9 +668,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         <div className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`} key={ex.k}>
           {ex.collapsed ? (
             <div className="exercise-collapsed-row">
-              {ExPic && (
+              {CollapsedPic && (
                 <span className="exercise-thumb exercise-thumb-sm" style={{ background: exColor + '26' }}>
-                  <ExPic width="20" height="20" />
+                  <CollapsedPic width="20" height="20" />
                 </span>
               )}
               <span className="exercise-collapsed-text">
@@ -691,7 +700,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   placeholder="Search or type exercise"
                   value={ex.name}
                   onChange={(e) => { updateExercise(ex.k, { name: e.target.value }); setSuggestFor(ex.k) }}
-                  onFocus={() => { if (ex.name.trim()) setSuggestFor(ex.k) }}
                   onBlur={() => setTimeout(() => setSuggestFor((cur) => (cur === ex.k ? null : cur)), 150)}
                 />
               </div>
