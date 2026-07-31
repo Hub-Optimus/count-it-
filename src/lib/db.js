@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 export async function fetchWorkouts() {
   const { data, error } = await supabase
     .from('workouts')
-    .select('id, date, split, notes, started_at, finished_at, exercises(id, name, notes, position, sets(id, weight, unit, reps, per_side, side, feel, warmup, position))')
+    .select('id, date, split, notes, started_at, finished_at, exercises(id, name, notes, position, superset_group, sets(id, weight, unit, reps, per_side, side, feel, warmup, position))')
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -23,7 +23,7 @@ export async function fetchWorkouts() {
 export async function insertChildren(userId, workoutId, exercises) {
   const { data: exRows, error: exErr } = await supabase
     .from('exercises')
-    .insert(exercises.map((ex, i) => ({ workout_id: workoutId, user_id: userId, name: ex.name, notes: ex.notes || null, position: i })))
+    .insert(exercises.map((ex, i) => ({ workout_id: workoutId, user_id: userId, name: ex.name, notes: ex.notes || null, superset_group: ex.superset || null, position: i })))
     .select('id, position')
   if (exErr) throw exErr
 
@@ -86,6 +86,9 @@ export async function mergeWorkouts(userId, keepWorkout, mergeFromWorkout) {
     w.exercises.map((ex) => ({
       name: ex.name,
       notes: ex.notes,
+      // superset deliberately dropped here - two independent workouts'
+      // group keys could collide and incorrectly link unrelated
+      // exercises together, which is worse than just losing the link
       sets: ex.sets.map((s) => ({
         weight: s.weight, unit: s.unit, reps: s.reps, perSide: s.per_side, side: s.side, feel: s.feel,
         warmup: s.warmup,
