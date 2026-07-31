@@ -1438,16 +1438,50 @@ export const GROUP_COLOR = {
 // the exact 3-4 word canonical name). 'any' finds a match as long as
 // the meaningful words line up, which is how people actually type
 // when searching from memory.
-let _fuse = null
-export function searchExercises(query) {
-  if (!_fuse) {
-    _fuse = new Fuse(EXERCISES, {
-      keys: ['name'],
-      threshold: 0.32,
-      ignoreLocation: true,
-      useTokenSearch: true,
-      tokenMatch: 'any',
-    })
+let _wordFuse = null
+function getWordFuse() {
+  if (!_wordFuse) {
+    _wordFuse = new Fuse(EXERCISES, { keys: ['name'], includeScore: true, threshold: 0.3, ignoreLocation: true })
   }
-  return _fuse.search(query).map((r) => r.item)
+  return _wordFuse
+}
+
+// Standard information-retrieval fallback cascade (the same idea as
+// Elasticsearch's "minimum_should_match"): each query word is matched
+// independently against the library, then results are ranked by how
+// many distinct words they actually matched (most first), tie-broken
+// by match tightness. Short queries (<=2 words) require every word to
+// match; longer queries tolerate exactly one non-matching word.
+//
+// This exists because relying on Fuse's own built-in multi-word
+// scoring produced results that were hard to reason about and, worse,
+// sometimes empty - e.g. "flat bench press" returned nothing under
+// strict all-words matching, because the word "flat" genuinely does
+// not appear on ANY bench press entry in this dataset (the standard/
+// flat variant is just called "Bench Press", unqualified - only
+// Incline/Decline get an explicit word). No amount of fuzzy-matching
+// tuning fixes a word that isn't in the data at all; the fix is
+// tolerating one such non-matching word rather than requiring all of
+// them, which is what real search engines do for exactly this reason.
+export function searchExercises(query) {
+  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return []
+
+  const wordFuse = getWordFuse()
+  const matched = new Map() // exercise name -> { count, bestScore, item }
+  for (const tok of tokens) {
+    for (const r of wordFuse.search(tok)) {
+      const name = r.item.name
+      const cur = matched.get(name) || { count: 0, bestScore: Infinity, item: r.item }
+      cur.count += 1
+      cur.bestScore = Math.min(cur.bestScore, r.score)
+      matched.set(name, cur)
+    }
+  }
+
+  const minRequired = tokens.length <= 2 ? tokens.length : tokens.length - 1
+  return [...matched.values()]
+    .filter((m) => m.count >= minRequired)
+    .sort((a, b) => (b.count !== a.count ? b.count - a.count : a.bestScore - b.bestScore))
+    .map((m) => m.item)
 }
