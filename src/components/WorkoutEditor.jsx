@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide } from '../lib/db'
 import { todayISO, toKg } from '../lib/format'
 import ExercisePicker from './ExercisePicker'
-import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
+import { pictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
@@ -206,6 +206,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
+  // Which exercise's name field currently has a live-suggestions
+  // dropdown open beneath it - only ever one at a time.
+  const [suggestFor, setSuggestFor] = useState(null)
   const [targets, setTargets] = useState({}) // { 'exercise name lowercase': targetReps }
 
   useEffect(() => {
@@ -685,7 +688,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 className="input"
                 placeholder={`Exercise ${exIdx + 1}`}
                 value={ex.name}
-                onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
+                onChange={(e) => { updateExercise(ex.k, { name: e.target.value }); setSuggestFor(ex.k) }}
+                onFocus={() => { if (ex.name.trim()) setSuggestFor(ex.k) }}
+                onBlur={() => setTimeout(() => setSuggestFor((cur) => (cur === ex.k ? null : cur)), 150)}
               />
               <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -699,6 +704,31 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               )}
               <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
             </div>
+
+            {suggestFor === ex.k && ex.name.trim() && (() => {
+              const results = searchExercises(ex.name.trim()).slice(0, 6)
+              const exact = results.some((r) => r.name.toLowerCase() === ex.name.trim().toLowerCase())
+              if (results.length === 0) return null
+              return (
+                <div className="name-suggestions">
+                  {results.map((r) => (
+                    <button
+                      key={r.name}
+                      className="name-suggestion-row"
+                      // onMouseDown fires before the input's onBlur, so
+                      // the click registers before the dropdown closes -
+                      // onClick alone would lose the tap to the blur.
+                      onMouseDown={(e) => { e.preventDefault(); updateExercise(ex.k, { name: r.name }); setSuggestFor(null) }}
+                    >
+                      {r.name}
+                      {exact && r.name.toLowerCase() === ex.name.trim().toLowerCase() && (
+                        <span className="name-suggestion-exact">exact match</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
 
           {(ex.notes || ex.notesOpen) ? (
             <textarea

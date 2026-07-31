@@ -1,18 +1,6 @@
 import { useMemo, useState } from 'react'
-import Fuse from 'fuse.js'
-import { GROUPS, EXERCISES, groupFor, pictogramFor, GROUP_COLOR } from '../lib/exerciseLibrary'
+import { GROUPS, EXERCISES, groupFor, pictogramFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
-
-// Built once, reused across every picker open — 873 items, cheap to keep in memory.
-// Tuned for typos and word-order (e.g. "dumble press" finds "Dumbbell Bench Press"):
-// tokenize matches per-word regardless of order, threshold allows small typos.
-const fuse = new Fuse(EXERCISES, {
-  keys: ['name'],
-  threshold: 0.32,
-  ignoreLocation: true,
-  useTokenSearch: true,
-  tokenMatch: 'all',
-})
 
 const GROUP_ABBR = {
   Chest: 'CH', Back: 'BK', Shoulders: 'SH', Legs: 'LG',
@@ -56,7 +44,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
 
   const filtered = useMemo(() => {
     if (!q) return null // browsing mode, not searching
-    const inLib = fuse.search(query.trim()).map((r) => r.item)
+    const inLib = searchExercises(query.trim())
     const inRecent = recentNames
       .filter((n) => n.toLowerCase().includes(q) && !inLib.some((e) => e.name === n))
       .map((name) => ({ name, group: groupFor(name) || 'Other' }))
@@ -139,7 +127,7 @@ export default function ExercisePicker({ recentNames = [], onSelect, onClose }) 
               )}
               {group === 'All' ? (
                 <p className="small" style={{ padding: '14px 4px' }}>
-                  873 exercises available — search above, or pick a muscle group to browse.
+                  1,318 exercises available — search above, or pick a muscle group to browse.
                 </p>
               ) : (
                 [...grouped.entries()].map(([g, list]) => (
