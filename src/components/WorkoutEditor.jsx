@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide } from '../lib/db'
+import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide, saveTemplate } from '../lib/db'
 import { todayISO, toKg } from '../lib/format'
 import { pictogramFor, exactPictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
@@ -95,7 +95,7 @@ function readDraft(target) {
   return d && d.target === target ? d : null
 }
 
-export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, autoResumeDraft, onClose, onSaved }) {
+export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, autoResumeDraft, initialExercises, onClose, onSaved }) {
   const target = workout?.id ?? 'new'
   // The k1/k2/... exercise keys are the same on every single page load
   // (the counter restarts each time), so a name built only from them is
@@ -175,7 +175,13 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   const [notes, setNotes] = useState(workout?.notes ?? '')
-  const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
+  const [exercises, setExercises] = useState(() => {
+    if (workout) return toModel(workout)
+    if (initialExercises && initialExercises.length > 0) {
+      return initialExercises.map((name) => ({ ...blankExercise(defaultUnit), name }))
+    }
+    return [blankExercise(defaultUnit)]
+  })
   // Snapshot of every set-key that existed the moment this editor opened
   // - only meaningful when editing an already-saved workout. Lets us
   // tell "genuinely new activity added during this edit" (a fresh
@@ -505,6 +511,19 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     } catch (e) {
       setError(e.message || 'Could not delete. Check your connection and try again.')
       setSaving(false)
+    }
+  }
+
+  async function saveAsTemplate() {
+    const names = exercises.map((ex) => ex.name.trim()).filter(Boolean)
+    if (names.length === 0) return
+    const name = window.prompt('Name this template (e.g. "Push Day A")')
+    if (!name || !name.trim()) return
+    try {
+      await saveTemplate(user.id, name.trim(), names)
+      window.alert(`Saved "${name.trim()}" as a template.`)
+    } catch (e) {
+      window.alert('Could not save the template. Check your connection and try again.')
     }
   }
 
@@ -962,6 +981,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         {workout && (
           <button className="btn btn-danger" onClick={removeWholeWorkout} disabled={saving}>
             Delete workout
+          </button>
+        )}
+        {exercises.some((ex) => ex.name.trim()) && (
+          <button className="btn btn-ghost" onClick={saveAsTemplate} disabled={saving}>
+            Save as template
           </button>
         )}
         <button className="btn btn-primary btn-block" onClick={save} disabled={saving}>
