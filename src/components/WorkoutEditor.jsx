@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide } from '../lib/db'
 import { todayISO, toKg } from '../lib/format'
-import { pictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
+import { pictogramFor, exactPictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
@@ -630,7 +630,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
       <div className="exercise-grid">
       {exercises.map((ex, exIdx) => {
-        const ExPic = PICTOGRAMS[pictogramFor(ex.name)]
+        const ExPic = PICTOGRAMS[exactPictogramFor(ex.name)]
         const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
@@ -709,7 +709,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               if (results.length === 0) return null
               return (
                 <div className="name-suggestions">
-                  {results.map((r) => (
+                  {results.map((r) => {
+                    const RPic = PICTOGRAMS[r.pictogram]
+                    const rColor = GROUP_COLOR[r.group] || GROUP_COLOR.Other
+                    return (
                     <button
                       key={r.name}
                       className="name-suggestion-row"
@@ -718,12 +721,20 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                       // onClick alone would lose the tap to the blur.
                       onMouseDown={(e) => { e.preventDefault(); updateExercise(ex.k, { name: r.name }); setSuggestFor(null) }}
                     >
-                      {r.name}
+                      {RPic ? (
+                        <span className="name-suggestion-icon" style={{ background: rColor + '26' }}>
+                          <RPic width="18" height="18" />
+                        </span>
+                      ) : (
+                        <span className="name-suggestion-icon name-suggestion-icon-dot" style={{ background: rColor }} />
+                      )}
+                      <span className="name-suggestion-text">{r.name}</span>
                       {exact && r.name.toLowerCase() === ex.name.trim().toLowerCase() && (
                         <span className="name-suggestion-exact">exact match</span>
                       )}
                     </button>
-                  ))}
+                    )
+                  })}
                 </div>
               )
             })()}
