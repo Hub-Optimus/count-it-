@@ -49,7 +49,36 @@ const nextKey = () => `k${++seq}`
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
 const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', warmup: false })
-const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false })
+const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false, superset: null })
+
+// Turns raw superset group keys into readable "A1"/"A2"/"B1"/"B2"
+// labels, based on the order groups first appear in the exercise list.
+// A group of size 1 (its partner got removed) shows no label at all -
+// a superset needs at least two members to mean anything.
+function supersetLabels(exercises) {
+  const groupOrder = []
+  for (const ex of exercises) {
+    if (ex.superset && !groupOrder.includes(ex.superset)) groupOrder.push(ex.superset)
+  }
+  const counters = {}
+  const labels = new Map()
+  for (const ex of exercises) {
+    if (!ex.superset) continue
+    const size = exercises.filter((e) => e.superset === ex.superset).length
+    if (size < 2) continue
+    const letter = String.fromCharCode(65 + groupOrder.indexOf(ex.superset))
+    counters[ex.superset] = (counters[ex.superset] || 0) + 1
+    labels.set(ex.k, `${letter}${counters[ex.superset]}`)
+  }
+  return labels
+}
+
+const SUPERSET_COLORS = ['#4e86f7', '#f5b93b', '#57a35f', '#e5484d', '#c77dff']
+function supersetColor(label) {
+  if (!label) return null
+  const letterIndex = label.charCodeAt(0) - 65
+  return SUPERSET_COLORS[letterIndex % SUPERSET_COLORS.length]
+}
 
 function historySet(histSet) {
   return {
@@ -77,6 +106,7 @@ function toModel(workout) {
     // (blankExercise, elsewhere) starts open.
     collapsed: true,
     notes: ex.notes || '',
+    superset: ex.superset_group || null,
     sets: ex.sets.map((s) => ({
       k: nextKey(),
       weight: s.weight ?? '',
@@ -213,6 +243,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // Which exercise's name field currently has a live-suggestions
   // dropdown open beneath it - only ever one at a time.
   const [suggestFor, setSuggestFor] = useState(null)
+  const supersetLabelByKey = useMemo(() => supersetLabels(exercises), [exercises])
   const [targets, setTargets] = useState({}) // { 'exercise name lowercase': targetReps }
 
   useEffect(() => {
@@ -474,6 +505,22 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setExercises((list) => [...list, blankExercise(defaultUnit)])
   }
 
+  function linkWithPrevious(exK) {
+    touch()
+    setExercises((list) => {
+      const idx = list.findIndex((e) => e.k === exK)
+      if (idx <= 0) return list
+      const prev = list[idx - 1]
+      const groupKey = prev.superset || `g${nextKey()}`
+      return list.map((e, i) => (i === idx || i === idx - 1) ? { ...e, superset: groupKey } : e)
+    })
+  }
+
+  function unlinkSuperset(exK) {
+    touch()
+    setExercises((list) => list.map((e) => (e.k === exK ? { ...e, superset: null } : e)))
+  }
+
   function removeExercise(exK) {
     const ex = exercises.find((e) => e.k === exK)
     const filled = ex && (ex.name.trim() || ex.sets.some((s) => s.weight !== '' || s.reps !== ''))
@@ -534,6 +581,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       .map((ex) => ({
         name: ex.name.trim(),
         notes: ex.notes.trim() || null,
+        superset: ex.superset || null,
         sets: ex.sets
           .filter((s) => s.weight !== '' || s.reps !== '')
           .map((s) => {
@@ -691,7 +739,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           ? validSets.reduce((best, st) => (Number(st.weight) > Number(best.weight) ? st : best), validSets[0])
           : null
         return (
-        <div className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`} key={ex.k}>
+        <div
+          className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`}
+          style={supersetLabelByKey.get(ex.k) ? { borderLeft: `3px solid ${supersetColor(supersetLabelByKey.get(ex.k))}` } : undefined}
+          key={ex.k}
+        >
           {ex.collapsed ? (
             <div className="exercise-collapsed-row">
               {CollapsedPic && (
@@ -700,7 +752,17 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 </span>
               )}
               <span className="exercise-collapsed-text">
-                <span className="exercise-collapsed-name">{ex.name || `Exercise ${exIdx + 1}`}</span>
+                <span className="exercise-collapsed-name">
+                  {supersetLabelByKey.get(ex.k) && (
+                    <span
+                      className="superset-badge superset-badge-sm"
+                      style={{ background: supersetColor(supersetLabelByKey.get(ex.k)) + '33', color: supersetColor(supersetLabelByKey.get(ex.k)) }}
+                    >
+                      {supersetLabelByKey.get(ex.k)}
+                    </span>
+                  )}
+                  {ex.name || `Exercise ${exIdx + 1}`}
+                </span>
                 <span className="exercise-collapsed-meta">
                   {validSets.length} set{validSets.length === 1 ? '' : 's'}
                   {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
@@ -715,6 +777,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               {ExPic && (
                 <span className="exercise-thumb" style={{ background: exColor + '26' }}>
                   <ExPic width="30" height="30" />
+                </span>
+              )}
+              {supersetLabelByKey.get(ex.k) && (
+                <span
+                  className="superset-badge"
+                  style={{ background: supersetColor(supersetLabelByKey.get(ex.k)) + '33', color: supersetColor(supersetLabelByKey.get(ex.k)) }}
+                  title="Linked as a superset"
+                >
+                  {supersetLabelByKey.get(ex.k)}
                 </span>
               )}
               <div className="name-input-wrap">
@@ -736,6 +807,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               )}
               <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
             </div>
+
+            {(() => {
+              const prev = exIdx > 0 ? exercises[exIdx - 1] : null
+              const alreadyLinkedToPrev = prev && ex.superset && ex.superset === prev.superset
+              if (ex.superset) {
+                return (
+                  <button className="superset-link-action" onClick={() => unlinkSuperset(ex.k)}>
+                    Unlink from superset
+                  </button>
+                )
+              }
+              if (prev && !alreadyLinkedToPrev) {
+                return (
+                  <button className="superset-link-action" onClick={() => linkWithPrevious(ex.k)}>
+                    Link as superset with "{prev.name.trim() || `Exercise ${exIdx}`}"
+                  </button>
+                )
+              }
+              return null
+            })()}
 
             {suggestFor === ex.k && ex.name.trim() && (() => {
               const results = searchExercises(ex.name.trim()).slice(0, 6)
