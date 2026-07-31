@@ -1402,6 +1402,19 @@ export function pictogramFor(name) {
   if (exact) return exact
   return keywordCategory(name)
 }
+
+// Strict version for the moment BEFORE a name is confirmed as a real,
+// chosen exercise (i.e. while live-typing/searching) - deliberately
+// skips the keyword fallback above. Showing an icon for loose keyword
+// matches on raw search text (e.g. "bicep curls" while still browsing
+// suggestions) falsely implies a selection has been made when it
+// hasn't. Once a name exactly matches a real library entry - typed in
+// full, or picked from the suggestions list - this returns the same
+// result as pictogramFor; until then it returns null.
+export function exactPictogramFor(name) {
+  if (!name) return null
+  return PICTOGRAM_BY_NAME.get(name.trim().toLowerCase()) || null
+}
 // Shared muscle-group accent colors, used for badges and pictogram tiles.
 export const GROUP_COLOR = {
   Chest: '#e5484d',
