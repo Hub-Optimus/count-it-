@@ -3,6 +3,7 @@
 // precise target-muscle data (not guessed from the name). Only the free MIT-licensed
 // metadata is used here — the dataset's GIFs/images are (c) Gym visual, a separate
 // commercial license, and are NOT included or referenced anywhere in this app.
+import Fuse from 'fuse.js'
 
 export const GROUPS = ['Chest', 'Back', 'Shoulders', 'Legs', 'Biceps', 'Triceps', 'Core', 'Cardio']
 
@@ -1401,6 +1402,19 @@ export function pictogramFor(name) {
   if (exact) return exact
   return keywordCategory(name)
 }
+
+// Strict version for the moment BEFORE a name is confirmed as a real,
+// chosen exercise (i.e. while live-typing/searching) - deliberately
+// skips the keyword fallback above. Showing an icon for loose keyword
+// matches on raw search text (e.g. "bicep curls" while still browsing
+// suggestions) falsely implies a selection has been made when it
+// hasn't. Once a name exactly matches a real library entry - typed in
+// full, or picked from the suggestions list - this returns the same
+// result as pictogramFor; until then it returns null.
+export function exactPictogramFor(name) {
+  if (!name) return null
+  return PICTOGRAM_BY_NAME.get(name.trim().toLowerCase()) || null
+}
 // Shared muscle-group accent colors, used for badges and pictogram tiles.
 export const GROUP_COLOR = {
   Chest: '#e5484d',
@@ -1412,4 +1426,62 @@ export const GROUP_COLOR = {
   Core: '#ff9f5b',
   Cardio: '#f06fa8',
   Other: '#767b84',
+}
+
+// Single shared fuzzy-search config, used everywhere exercises are
+// searched (the live-suggest field and the full browse picker), so
+// both always agree on what counts as a match.
+//
+// tokenMatch: 'any' (not 'all') is the important part here - 'all'
+// required EVERY word typed to closely match something in the name,
+// which quietly punished normal, imprecise phrasing (nobody remembers
+// the exact 3-4 word canonical name). 'any' finds a match as long as
+// the meaningful words line up, which is how people actually type
+// when searching from memory.
+let _wordFuse = null
+function getWordFuse() {
+  if (!_wordFuse) {
+    _wordFuse = new Fuse(EXERCISES, { keys: ['name'], includeScore: true, threshold: 0.3, ignoreLocation: true })
+  }
+  return _wordFuse
+}
+
+// Standard information-retrieval fallback cascade (the same idea as
+// Elasticsearch's "minimum_should_match"): each query word is matched
+// independently against the library, then results are ranked by how
+// many distinct words they actually matched (most first), tie-broken
+// by match tightness. Short queries (<=2 words) require every word to
+// match; longer queries tolerate exactly one non-matching word.
+//
+// This exists because relying on Fuse's own built-in multi-word
+// scoring produced results that were hard to reason about and, worse,
+// sometimes empty - e.g. "flat bench press" returned nothing under
+// strict all-words matching, because the word "flat" genuinely does
+// not appear on ANY bench press entry in this dataset (the standard/
+// flat variant is just called "Bench Press", unqualified - only
+// Incline/Decline get an explicit word). No amount of fuzzy-matching
+// tuning fixes a word that isn't in the data at all; the fix is
+// tolerating one such non-matching word rather than requiring all of
+// them, which is what real search engines do for exactly this reason.
+export function searchExercises(query) {
+  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return []
+
+  const wordFuse = getWordFuse()
+  const matched = new Map() // exercise name -> { count, bestScore, item }
+  for (const tok of tokens) {
+    for (const r of wordFuse.search(tok)) {
+      const name = r.item.name
+      const cur = matched.get(name) || { count: 0, bestScore: Infinity, item: r.item }
+      cur.count += 1
+      cur.bestScore = Math.min(cur.bestScore, r.score)
+      matched.set(name, cur)
+    }
+  }
+
+  const minRequired = tokens.length <= 2 ? tokens.length : tokens.length - 1
+  return [...matched.values()]
+    .filter((m) => m.count >= minRequired)
+    .sort((a, b) => (b.count !== a.count ? b.count - a.count : a.bestScore - b.bestScore))
+    .map((m) => m.item)
 }

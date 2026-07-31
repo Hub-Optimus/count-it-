@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide } from '../lib/db'
 import { todayISO, toKg } from '../lib/format'
-import ExercisePicker from './ExercisePicker'
-import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
+import { pictogramFor, exactPictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
@@ -96,7 +95,7 @@ function readDraft(target) {
   return d && d.target === target ? d : null
 }
 
-export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, onClose, onSaved }) {
+export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, autoResumeDraft, onClose, onSaved }) {
   const target = workout?.id ?? 'new'
   // The k1/k2/... exercise keys are the same on every single page load
   // (the counter restarts each time), so a name built only from them is
@@ -115,7 +114,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // a fresh "right now" timestamp just because the workout is being
   // opened, or every old workout would falsely look like it took ~0
   // minutes the instant you edited anything else on it.
-  const [startedAt] = useState(() => (workout ? (workout.started_at ?? null) : new Date().toISOString()))
+  const [startedAt, setStartedAt] = useState(() => (workout ? (workout.started_at ?? null) : new Date().toISOString()))
   // Workout Duration, edited as a simple hour:minute clock picker rather
   // than a bare number - "1:30" reads instantly, "90" makes you do math.
   // Only ever shown for an already-saved workout being reopened.
@@ -151,7 +150,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // counting the real gap since the original session (e.g. 47 minutes
   // if he stepped away and came back). A break should never silently
   // become part of the workout duration.
-  const [clockAnchorMs] = useState(() => (workout ? null : new Date(startedAt).getTime()))
+  const [clockAnchorMs, setClockAnchorMs] = useState(() => (workout ? null : new Date(startedAt).getTime()))
   const [resumedClockAnchorMs, setResumedClockAnchorMs] = useState(null)
   const effectiveClockAnchorMs = clockAnchorMs ?? resumedClockAnchorMs
 
@@ -191,9 +190,23 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     return keys
   })
   const [draft, setDraft] = useState(() => readDraft(target))
+  // He already decided to resume once, from the dashboard-level confirm
+  // or banner - asking again in here, with its own separate Resume
+  // button, would just be making him confirm the same decision twice.
+  // Runs once, right after mount, only when there's actually a draft
+  // AND the dashboard explicitly signaled this was a confirmed resume.
+  const autoResumedRef = useRef(false)
+  useEffect(() => {
+    if (autoResumeDraft && draft && !autoResumedRef.current) {
+      autoResumedRef.current = true
+      resumeDraft()
+    }
+  }, [autoResumeDraft, draft])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [pickerFor, setPickerFor] = useState(null) // exercise key whose picker is open, or null
+  // Which exercise's name field currently has a live-suggestions
+  // dropdown open beneath it - only ever one at a time.
+  const [suggestFor, setSuggestFor] = useState(null)
   const [targets, setTargets] = useState({}) // { 'exercise name lowercase': targetReps }
 
   useEffect(() => {
@@ -336,7 +349,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     if (!dirtyRef.current) return
     const t = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, notes, exercises, ts: Date.now() }))
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, date, notes, exercises, startedAt, ts: Date.now() }))
       } catch { /* storage full - draft is best effort */ }
     }, 350)
     return () => clearTimeout(t)
@@ -346,6 +359,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setDate(draft.date)
     setNotes(draft.notes)
     setExercises(draft.exercises.map((ex) => ({ ...ex, k: nextKey(), sets: ex.sets.map((s) => ({ ...s, k: nextKey() })) })))
+    // The clock previously had no way to reflect a resumed session's
+    // real start time - it was locked in at page-load the instant this
+    // component mounted, before Resume was ever tapped. Restoring both
+    // together is what actually fixes the "starts from 0" bug, not just
+    // bringing the sets back.
+    if (draft.startedAt) {
+      setStartedAt(draft.startedAt)
+      setClockAnchorMs(new Date(draft.startedAt).getTime())
+    }
     dirtyRef.current = true
     setDraft(null)
   }
@@ -583,7 +605,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         </div>
       )}
 
-      {draft && (
+      {draft && !autoResumeDraft && (
         <div className="banner">
           <span>You have an unsaved draft from this device.</span>
           <span className="banner-actions">
@@ -608,7 +630,23 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
       <div className="exercise-grid">
       {exercises.map((ex, exIdx) => {
-        const ExPic = PICTOGRAMS[pictogramFor(ex.name)]
+        // Collapsed exercises are already-saved, done data - there's no
+        // "is this confirmed yet" ambiguity, so the loose keyword-based
+        // lookup is correct here (handles minor real-world variations
+        // like "Lateral Raise (Machine)" that don't exactly match the
+        // canonical library string). The live-editing header uses the
+        // strict exact-only version instead, since THAT'S the one where
+        // showing an icon prematurely (before a real selection) is
+        // actually misleading.
+        const CollapsedPic = PICTOGRAMS[pictogramFor(ex.name)]
+        // Strict (exact-only) matching only matters while actively
+        // searching right now - that's the one moment where showing an
+        // icon could misleadingly imply "this is confirmed" before it
+        // is. Once the dropdown isn't open, this is just an already-set
+        // name (freshly picked, typed in full, or reopened from
+        // history) and the loose match is correct, same as the
+        // collapsed view.
+        const ExPic = PICTOGRAMS[suggestFor === ex.k ? exactPictogramFor(ex.name) : pictogramFor(ex.name)]
         const exColor = GROUP_COLOR[groupFor(ex.name)] || GROUP_COLOR.Other
         const lastSession = ex.name.trim() ? lastSessionFor(workouts, ex.name, workout?.id) : null
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
@@ -637,9 +675,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         <div className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`} key={ex.k}>
           {ex.collapsed ? (
             <div className="exercise-collapsed-row">
-              {ExPic && (
+              {CollapsedPic && (
                 <span className="exercise-thumb exercise-thumb-sm" style={{ background: exColor + '26' }}>
-                  <ExPic width="20" height="20" />
+                  <CollapsedPic width="20" height="20" />
                 </span>
               )}
               <span className="exercise-collapsed-text">
@@ -660,17 +698,18 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   <ExPic width="30" height="30" />
                 </span>
               )}
-              <input
-                className="input"
-                placeholder={`Exercise ${exIdx + 1}`}
-                value={ex.name}
-                onChange={(e) => updateExercise(ex.k, { name: e.target.value })}
-              />
-              <button className="mini-btn browse-btn" onClick={() => setPickerFor(ex.k)} aria-label="Browse exercises" title="Browse exercises">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="name-input-wrap">
+                <svg className="name-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="10.5" cy="10.5" r="6.5" /><line x1="20" y1="20" x2="15.5" y2="15.5" />
                 </svg>
-              </button>
+                <input
+                  className="input name-input"
+                  placeholder="Search or type exercise"
+                  value={ex.name}
+                  onChange={(e) => { updateExercise(ex.k, { name: e.target.value }); setSuggestFor(ex.k) }}
+                  onBlur={() => setTimeout(() => setSuggestFor((cur) => (cur === ex.k ? null : cur)), 150)}
+                />
+              </div>
               {ex.sets.some((s) => s.weight !== '' && s.reps !== '') && (
                 <button className="mini-btn done-btn" onClick={() => toggleCollapsed(ex.k)} title="Done with this exercise">
                   ✓ Done
@@ -678,6 +717,42 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               )}
               <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
             </div>
+
+            {suggestFor === ex.k && ex.name.trim() && (() => {
+              const results = searchExercises(ex.name.trim()).slice(0, 6)
+              const exact = results.some((r) => r.name.toLowerCase() === ex.name.trim().toLowerCase())
+              if (results.length === 0) return null
+              return (
+                <div className="name-suggestions">
+                  {results.map((r) => {
+                    const RPic = PICTOGRAMS[r.pictogram]
+                    const rColor = GROUP_COLOR[r.group] || GROUP_COLOR.Other
+                    return (
+                    <button
+                      key={r.name}
+                      className="name-suggestion-row"
+                      // onMouseDown fires before the input's onBlur, so
+                      // the click registers before the dropdown closes -
+                      // onClick alone would lose the tap to the blur.
+                      onMouseDown={(e) => { e.preventDefault(); updateExercise(ex.k, { name: r.name }); setSuggestFor(null) }}
+                    >
+                      {RPic ? (
+                        <span className="name-suggestion-icon" style={{ background: rColor + '26' }}>
+                          <RPic width="18" height="18" />
+                        </span>
+                      ) : (
+                        <span className="name-suggestion-icon name-suggestion-icon-dot" style={{ background: rColor }} />
+                      )}
+                      <span className="name-suggestion-text">{r.name}</span>
+                      {exact && r.name.toLowerCase() === ex.name.trim().toLowerCase() && (
+                        <span className="name-suggestion-exact">exact match</span>
+                      )}
+                    </button>
+                    )
+                  })}
+                </div>
+              )
+            })()}
 
           {(ex.notes || ex.notesOpen) ? (
             <textarea
@@ -696,14 +771,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             <button className="exercise-note-toggle" onClick={() => updateExercise(ex.k, { notesOpen: true })}>
               + Note for this exercise
             </button>
-          )}
-
-          {pickerFor === ex.k && (
-            <ExercisePicker
-              recentNames={exerciseNames}
-              onSelect={(name) => updateExercise(ex.k, { name })}
-              onClose={() => setPickerFor(null)}
-            />
           )}
 
           {readyToProgress && (

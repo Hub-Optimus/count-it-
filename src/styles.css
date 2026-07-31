@@ -84,6 +84,30 @@ button { cursor: pointer; }
   display: block;
 }
 
+.version-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  background: color-mix(in srgb, var(--yellow) 18%, var(--bg-deep));
+  border-bottom: 1px solid var(--yellow);
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.version-banner-btn {
+  width: auto;
+  flex: none;
+  min-height: 32px;
+  padding: 4px 14px;
+  font-size: 12.5px;
+}
+
 .side-panel { display: none; }
 
 
@@ -493,6 +517,72 @@ input[type='date'].input { color-scheme: dark; }
 }
 
 .exercise-head .input { font-weight: 700; }
+
+.name-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.name-input-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.name-input { padding-left: 36px; }
+
+.name-suggestions {
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.name-suggestion-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.name-suggestion-row:last-child { border-bottom: none; }
+.name-suggestion-row:active { background: var(--card); }
+
+.name-suggestion-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+}
+
+.name-suggestion-icon-dot { width: 10px; height: 10px; margin: 8px; border-radius: 50%; }
+
+.name-suggestion-text { flex: 1; min-width: 0; }
+
+.name-suggestion-exact {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 .exercise-note-toggle {
   display: block;
