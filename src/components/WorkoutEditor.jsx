@@ -49,7 +49,7 @@ const nextKey = () => `k${++seq}`
 // Sets pre-filled from history behave exactly like any other set - no
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', warmup: false })
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', warmup: false, noWeight: false })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false, superset: null })
 
 // Turns raw superset group keys into readable "A1"/"A2"/"B1"/"B2"
@@ -155,6 +155,7 @@ function toModel(workout) {
       side: s.side || null,
       feel: s.feel || '',
       warmup: Boolean(s.warmup),
+      noWeight: false,
     })),
   }))
 }
@@ -520,6 +521,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
 
   function toggleWarmup(exK, setK, currentWarmup) {
     updateSet(exK, setK, { warmup: !currentWarmup })
+  }
+
+  function toggleNoWeight(exK, setK, currentNoWeight) {
+    updateSet(exK, setK, { noWeight: !currentNoWeight, weight: '' })
   }
 
   const oppositeSide = (s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null)
@@ -1018,8 +1023,22 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   >
                     {s.warmup ? '✓ Warm-up set' : 'Warm-up set?'}
                   </button>
-                  <button className="text-link-btn set-timer-link" onClick={() => setTimerFor({ exK: ex.k, setK: s.k })}>
-                    ⏱ Time this set
+                  <button
+                    className={`chip ${s.noWeight ? 'on' : ''}`}
+                    onClick={() => toggleNoWeight(ex.k, s.k, s.noWeight)}
+                  >
+                    {s.noWeight ? '✓ No weight' : 'No weight'}
+                  </button>
+                  {!s.noWeight && s.weight === '' && latestBodyweight && (
+                    <button
+                      className="chip"
+                      onClick={() => updateSet(ex.k, s.k, { weight: String(latestBodyweight.weight), unit: latestBodyweight.unit })}
+                    >
+                      Bodyweight ({latestBodyweight.weight}{latestBodyweight.unit === 'lbs' ? 'lb' : 'kg'})
+                    </button>
+                  )}
+                  <button className="chip" onClick={() => setTimerFor({ exK: ex.k, setK: s.k })}>
+                    Timer
                   </button>
                 </div>
                 <div className="set-row">
@@ -1035,9 +1054,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     autoCapitalize="off"
                     spellCheck="false"
                     name={`weight-${s.k}`}
-                    placeholder="weight"
+                    placeholder={s.noWeight ? 'no weight' : 'weight'}
                     aria-label={`Set ${i + 1} weight`}
                     value={s.weight}
+                    disabled={s.noWeight}
                     onChange={(e) => updateSet(ex.k, s.k, { weight: sanitizeWeightInput(e.target.value) })}
                   />
                   <button
@@ -1077,14 +1097,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 </div>
                 {weightWarning(s, bestSet) && (
                   <div className="field-hint weight-warning">{weightWarning(s, bestSet)}</div>
-                )}
-                {s.weight === '' && latestBodyweight && (
-                  <button
-                    className="text-link-btn"
-                    onClick={() => updateSet(ex.k, s.k, { weight: String(latestBodyweight.weight), unit: latestBodyweight.unit })}
-                  >
-                    Use my bodyweight ({latestBodyweight.weight}{latestBodyweight.unit === 'lbs' ? 'lb' : 'kg'})
-                  </button>
                 )}
                 <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
