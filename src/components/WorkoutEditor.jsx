@@ -983,9 +983,12 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               ) : <span className="small">No history for this exercise yet</span>}
               {lastSession && (
                 <span className="small">
-                  Last time ({fmtDate(lastSession.date)}): {lastSession.sets.map((s, idx) => (
-                    <span key={idx}>{idx > 0 ? ', ' : ''}{s.weight ?? '–'}{s.unit === 'lbs' ? 'lb' : 'kg'}×{s.reps ?? '–'}</span>
-                  ))}
+                  Last time ({fmtDate(lastSession.date)}): {lastSession.sets.map((s, idx) => {
+                    const feelEmoji = FEELS.find((f) => f.value === s.feel)?.emoji
+                    return (
+                      <span key={idx}>{idx > 0 ? ', ' : ''}{s.weight ?? '–'}{s.unit === 'lbs' ? 'lb' : 'kg'}×{s.reps ?? '–'}{feelEmoji ? ` ${feelEmoji}` : ''}</span>
+                    )
+                  })}
                 </span>
               )}
             </div>
@@ -1094,20 +1097,23 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     {s.unit === 'kg' ? 'kg' : 'lb'}
                   </button>
                   <span className="times">×</span>
-                  <input
-                    className="input"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck="false"
-                    name={`reps-${s.k}`}
-                    placeholder="reps"
-                    aria-label={`Set ${i + 1} reps`}
-                    value={s.reps}
-                    onChange={(e) => updateSet(ex.k, s.k, { reps: sanitizeRepsInput(e.target.value), timedReps: false })}
-                  />
+                  <div className="reps-input-wrap">
+                    <input
+                      className={`input ${s.timedReps ? 'reps-input-timed' : ''}`}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                      name={`reps-${s.k}`}
+                      placeholder="reps"
+                      aria-label={`Set ${i + 1} reps`}
+                      value={s.reps}
+                      onChange={(e) => updateSet(ex.k, s.k, { reps: sanitizeRepsInput(e.target.value), timedReps: false })}
+                    />
+                    {s.timedReps && <span className="reps-unit-suffix" aria-hidden="true">sec</span>}
+                  </div>
                   {sidesActive ? (
                     <button
                       className={`mini-btn side-btn ${s.side ? `on ${s.side === 'R' ? 'side-r' : 'side-l'}` : 'side-unset'}`}
@@ -1122,7 +1128,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>✕</button>
                 </div>
                 {s.timedReps && (
-                  <div className="field-hint timed-reps-hint">⏱ Reps shown in seconds, from the timer</div>
+                  <div className="field-hint timed-reps-hint">from timer</div>
                 )}
                 {weightWarning(s, bestSet) && (
                   <div className="field-hint weight-warning">{weightWarning(s, bestSet)}</div>
