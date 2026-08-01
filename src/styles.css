@@ -322,6 +322,14 @@ button { cursor: pointer; }
   color: var(--bg-deep);
 }
 
+.chip-not-applied {
+  opacity: 0.55;
+  text-decoration: line-through;
+  text-decoration-style: dashed;
+  text-decoration-color: var(--red);
+  text-decoration-thickness: 1.5px;
+}
+
 /* feel chips wear plate colors */
 .feel-chip { padding: 5px 11px; min-height: 30px; font-size: 12.5px; }
 .feel-chip.f-easy.on { background: var(--green); border-color: var(--green); color: #081208; }
@@ -693,14 +701,6 @@ input[type='date'].input { color-scheme: dark; }
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 10px;
-}
-
-.warmup-chip {
-  display: inline-block;
-  flex: none;
-  font-size: 12.5px;
-  padding: 5px 11px;
-  min-height: 30px;
 }
 
 .warmup-chip.on {
