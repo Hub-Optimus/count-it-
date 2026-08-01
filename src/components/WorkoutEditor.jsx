@@ -106,6 +106,19 @@ function weightWarning(s, bestSet) {
   return null
 }
 
+// inputMode="decimal" only hints at which mobile keyboard to show - it
+// never actually blocks a physical keyboard, paste, or some on-screen
+// keyboards from entering letters. This is the real guard: strips
+// anything that isn't a digit, keeping at most one decimal point.
+function sanitizeWeightInput(raw) {
+  let cleaned = raw.replace(/[^\d.]/g, '')
+  const firstDot = cleaned.indexOf('.')
+  if (firstDot !== -1) {
+    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '')
+  }
+  return cleaned
+}
+
 function historySet(histSet) {
   return {
     k: nextKey(),
@@ -151,7 +164,7 @@ function readDraft(target) {
   return d && d.target === target ? d : null
 }
 
-export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, autoResumeDraft, initialExercises, onClose, onSaved }) {
+export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, autoResumeDraft, initialExercises, latestBodyweight, onClose, onSaved }) {
   const target = workout?.id ?? 'new'
   // The k1/k2/... exercise keys are the same on every single page load
   // (the counter restarts each time), so a name built only from them is
@@ -998,12 +1011,17 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
             return (
               <div key={s.k}>
-                <button
-                  className={`chip warmup-chip ${s.warmup ? 'on' : ''}`}
-                  onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
-                >
-                  {s.warmup ? '✓ Warm-up set' : 'Warm-up set?'}
-                </button>
+                <div className="set-actions-row">
+                  <button
+                    className={`chip warmup-chip ${s.warmup ? 'on' : ''}`}
+                    onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
+                  >
+                    {s.warmup ? '✓ Warm-up set' : 'Warm-up set?'}
+                  </button>
+                  <button className="text-link-btn set-timer-link" onClick={() => setTimerFor({ exK: ex.k, setK: s.k })}>
+                    ⏱ Time this set
+                  </button>
+                </div>
                 <div className="set-row">
                   <span className={`set-index ${s.warmup ? 'set-index-warmup' : ''}`}>
                     {s.warmup ? `W${i + 1}` : i + 1}
@@ -1020,7 +1038,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     placeholder="weight"
                     aria-label={`Set ${i + 1} weight`}
                     value={s.weight}
-                    onChange={(e) => updateSet(ex.k, s.k, { weight: e.target.value })}
+                    onChange={(e) => updateSet(ex.k, s.k, { weight: sanitizeWeightInput(e.target.value) })}
                   />
                   <button
                     className="mini-btn"
@@ -1060,6 +1078,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 {weightWarning(s, bestSet) && (
                   <div className="field-hint weight-warning">{weightWarning(s, bestSet)}</div>
                 )}
+                {s.weight === '' && latestBodyweight && (
+                  <button
+                    className="text-link-btn"
+                    onClick={() => updateSet(ex.k, s.k, { weight: String(latestBodyweight.weight), unit: latestBodyweight.unit })}
+                  >
+                    Use my bodyweight ({latestBodyweight.weight}{latestBodyweight.unit === 'lbs' ? 'lb' : 'kg'})
+                  </button>
+                )}
                 <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
                   {customFeel ? (
@@ -1081,9 +1107,6 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     ))
                   )}
                 </div>
-                <button className="text-link-btn" onClick={() => setTimerFor({ exK: ex.k, setK: s.k })}>
-                  ⏱ Time this set
-                </button>
               </div>
             )
           })}
