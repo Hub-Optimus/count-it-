@@ -89,6 +89,23 @@ function supersetColor(label) {
 // best (likely a typo, e.g. 500 instead of 50 - compared against the
 // exercise's OWN history, not a fixed number, since "500" is normal
 // for a leg press and absurd for a curl).
+// The Bodyweight chip should never simply vanish when a weight already
+// happens to be filled (e.g. auto-filled from history) - that hides a
+// real option the person might still want. Instead it stays visible
+// and reflects one of three states: "available" (weight is blank,
+// tap to apply), "active" (the current weight already IS their
+// bodyweight), or "mismatched" (something else is filled in right
+// now - still tappable to switch, but visually marked as not the
+// currently-applied value).
+function bodyweightChipState(s, latestBodyweight) {
+  if (!latestBodyweight) return null
+  if (s.weight === '') return 'available'
+  const bwKg = toKg(Number(latestBodyweight.weight), latestBodyweight.unit)
+  const curKg = toKg(Number(s.weight), s.unit)
+  if (Number.isFinite(curKg) && Math.abs(curKg - bwKg) < 0.01) return 'active'
+  return 'mismatched'
+}
+
 function weightWarning(s, bestSet) {
   if (s.weight === '' || s.reps === '') return null
   const w = Number(s.weight)
@@ -1029,14 +1046,17 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   >
                     {s.noWeight ? '✓ No weight' : 'No weight'}
                   </button>
-                  {!s.noWeight && s.weight === '' && latestBodyweight && (
-                    <button
-                      className="chip"
-                      onClick={() => updateSet(ex.k, s.k, { weight: String(latestBodyweight.weight), unit: latestBodyweight.unit })}
-                    >
-                      Bodyweight ({latestBodyweight.weight}{latestBodyweight.unit === 'lbs' ? 'lb' : 'kg'})
-                    </button>
-                  )}
+                  {!s.noWeight && latestBodyweight && (() => {
+                    const bwState = bodyweightChipState(s, latestBodyweight)
+                    return (
+                      <button
+                        className={`chip ${bwState === 'active' ? 'on' : ''} ${bwState === 'mismatched' ? 'chip-not-applied' : ''}`}
+                        onClick={() => updateSet(ex.k, s.k, { weight: String(latestBodyweight.weight), unit: latestBodyweight.unit })}
+                      >
+                        Bodyweight ({latestBodyweight.weight}{latestBodyweight.unit === 'lbs' ? 'lb' : 'kg'})
+                      </button>
+                    )
+                  })()}
                   <button className="chip" onClick={() => setTimerFor({ exK: ex.k, setK: s.k })}>
                     Timer
                   </button>
