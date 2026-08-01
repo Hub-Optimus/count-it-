@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, configured } from './lib/supabase'
-import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates } from './lib/db'
+import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates, fetchBodyMetrics } from './lib/db'
 import { todayISO } from './lib/format'
 import { peekDraft } from './lib/draft'
 import TabBar, { Tally } from './components/TabBar'
@@ -140,6 +140,16 @@ function Main({ user }) {
   useEffect(() => { reloadTemplates() }, [reloadTemplates])
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
 
+  // Most recent logged bodyweight - lets the weight field offer a
+  // one-tap "use my bodyweight" fill for bodyweight-loaded exercises
+  // (pull-ups etc.), instead of having to remember and retype it.
+  const [latestBodyweight, setLatestBodyweight] = useState(null)
+  useEffect(() => {
+    withJwtRetry(() => fetchBodyMetrics(user.id))
+      .then((rows) => setLatestBodyweight(rows[0] ? { weight: rows[0].weight, unit: rows[0].weight_unit } : null))
+      .catch(() => {})
+  }, [user.id])
+
   const exerciseNames = useMemo(() => {
     if (!workouts) return []
     const freq = new Map()
@@ -246,6 +256,7 @@ function Main({ user }) {
         defaultUnit={defaultUnit}
         autoResumeDraft={Boolean(editor.autoResumeDraft)}
         initialExercises={editor.initialExercises}
+        latestBodyweight={latestBodyweight}
         onClose={() => { setEditor(null); reloadTemplates() }}
         onSaved={() => { setEditor(null); load(); reloadTemplates() }}
       />

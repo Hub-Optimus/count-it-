@@ -682,9 +682,16 @@ input[type='date'].input { color-scheme: dark; }
    as the feel-chips right above it, which have never once been
    confusing. Motion and shape-only cues both fell short of actually
    explaining what the control does; only real words did. */
+.set-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .warmup-chip {
   display: inline-block;
-  margin-bottom: 8px;
+  flex: none;
   font-size: 12.5px;
   padding: 5px 11px;
   min-height: 30px;
@@ -694,6 +701,12 @@ input[type='date'].input { color-scheme: dark; }
   background: var(--blue);
   border-color: var(--blue);
   color: #060d1c;
+}
+
+.set-timer-link {
+  display: inline-block;
+  width: auto;
+  padding: 4px 0;
 }
 
 .weight-warning { color: var(--yellow); margin-bottom: 8px; }
