@@ -49,7 +49,7 @@ const nextKey = () => `k${++seq}`
 // Sets pre-filled from history behave exactly like any other set - no
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', warmup: false, noWeight: false })
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', warmup: false, noWeight: false, timedReps: false })
 const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false, superset: null })
 
 // Turns raw superset group keys into readable "A1"/"A2"/"B1"/"B2"
@@ -136,6 +136,11 @@ function sanitizeWeightInput(raw) {
   return cleaned
 }
 
+// Reps are always a whole number - no decimal point needed at all.
+function sanitizeRepsInput(raw) {
+  return raw.replace(/[^\d]/g, '')
+}
+
 function historySet(histSet) {
   return {
     k: nextKey(),
@@ -173,6 +178,7 @@ function toModel(workout) {
       feel: s.feel || '',
       warmup: Boolean(s.warmup),
       noWeight: false,
+      timedReps: false,
     })),
   }))
 }
@@ -349,7 +355,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setExercises((list) =>
       list.map((ex) => {
         if (ex.name.trim().toLowerCase() !== key) return ex
-        let side = 'L'
+        let side = 'R'
         return {
           ...ex,
           sets: ex.sets.map((s) => {
@@ -1053,7 +1059,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                         className={`chip ${bwState === 'active' ? 'on' : ''} ${bwState === 'mismatched' ? 'chip-not-applied' : ''}`}
                         onClick={() => updateSet(ex.k, s.k, { weight: String(latestBodyweight.weight), unit: latestBodyweight.unit })}
                       >
-                        Bodyweight ({latestBodyweight.weight}{latestBodyweight.unit === 'lbs' ? 'lb' : 'kg'})
+                        Bodyweight
                       </button>
                     )
                   })()}
@@ -1100,7 +1106,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     placeholder="reps"
                     aria-label={`Set ${i + 1} reps`}
                     value={s.reps}
-                    onChange={(e) => updateSet(ex.k, s.k, { reps: e.target.value })}
+                    onChange={(e) => updateSet(ex.k, s.k, { reps: sanitizeRepsInput(e.target.value), timedReps: false })}
                   />
                   {sidesActive ? (
                     <button
@@ -1115,6 +1121,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   )}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>✕</button>
                 </div>
+                {s.timedReps && (
+                  <div className="field-hint timed-reps-hint">⏱ Reps shown in seconds, from the timer</div>
+                )}
                 {weightWarning(s, bestSet) && (
                   <div className="field-hint weight-warning">{weightWarning(s, bestSet)}</div>
                 )}
@@ -1192,7 +1201,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           onClose={() => setTimerFor(null)}
           onUseAsReps={(seconds) => {
             touch()
-            updateSet(timerFor.exK, timerFor.setK, { reps: String(seconds) })
+            updateSet(timerFor.exK, timerFor.setK, { reps: String(seconds), timedReps: true })
             setTimerFor(null)
           }}
         />
