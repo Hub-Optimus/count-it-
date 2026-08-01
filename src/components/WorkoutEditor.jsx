@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide } from '../lib/db'
-import { todayISO, toKg } from '../lib/format'
+import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTargets, saveExerciseTarget, setTrackSides, setPerSide, saveTemplate } from '../lib/db'
+import { todayISO, toKg, fmtDate } from '../lib/format'
 import { pictogramFor, exactPictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
-import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
+import TimerModal from './TimerModal'
+import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime, compareSet } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
 // Simple, scalable clock glyph for the Workout Duration card - clean line
@@ -48,8 +49,135 @@ const nextKey = () => `k${++seq}`
 // Sets pre-filled from history behave exactly like any other set - no
 // separate "confirm" step, matching how Strong/Hevy handle this: the
 // pre-filled number IS the value, Save is the only confirmation needed.
-const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', warmup: false })
-const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false })
+const blankSet = (unit) => ({ k: nextKey(), weight: '', unit, reps: '', perSide: false, side: null, feel: '', warmup: false, noWeight: false, timedReps: false })
+const blankExercise = (unit) => ({ k: nextKey(), name: '', sets: [blankSet(unit)], collapsed: false, notes: '', notesOpen: false, superset: null })
+
+// Turns raw superset group keys into readable "A1"/"A2"/"B1"/"B2"
+// labels, based on the order groups first appear in the exercise list.
+// A group of size 1 (its partner got removed) shows no label at all -
+// a superset needs at least two members to mean anything.
+function supersetLabels(exercises) {
+  const groupOrder = []
+  for (const ex of exercises) {
+    if (ex.superset && !groupOrder.includes(ex.superset)) groupOrder.push(ex.superset)
+  }
+  const counters = {}
+  const labels = new Map()
+  for (const ex of exercises) {
+    if (!ex.superset) continue
+    const size = exercises.filter((e) => e.superset === ex.superset).length
+    if (size < 2) continue
+    const letter = String.fromCharCode(65 + groupOrder.indexOf(ex.superset))
+    counters[ex.superset] = (counters[ex.superset] || 0) + 1
+    labels.set(ex.k, `${letter}${counters[ex.superset]}`)
+  }
+  return labels
+}
+
+const SUPERSET_COLORS = ['#4e86f7', '#f5b93b', '#57a35f', '#e5484d', '#c77dff']
+function supersetColor(label) {
+  if (!label) return null
+  const letterIndex = label.charCodeAt(0) - 65
+  return SUPERSET_COLORS[letterIndex % SUPERSET_COLORS.length]
+}
+
+// Gentle, non-blocking sanity check on a set's weight - never blocks
+// saving, just surfaces the two most common real mistakes: typing a
+// literal "0" (almost always meant to be left blank, or meant to be
+// the person's own bodyweight for a bodyweight-loaded exercise like
+// pull-ups) and a weight wildly higher than that exercise's own past
+// best (likely a typo, e.g. 500 instead of 50 - compared against the
+// exercise's OWN history, not a fixed number, since "500" is normal
+// for a leg press and absurd for a curl).
+// The Bodyweight chip should never simply vanish when a weight already
+// happens to be filled (e.g. auto-filled from history) - that hides a
+// real option the person might still want. Instead it stays visible
+// and reflects one of three states: "available" (weight is blank,
+// tap to apply), "active" (the current weight already IS their
+// bodyweight), or "mismatched" (something else is filled in right
+// now - still tappable to switch, but visually marked as not the
+// currently-applied value).
+// Plain-language labels for compareSet()'s statuses - shown as a small
+// line right under a set, giving an at-a-glance read on how THIS set
+// compares to the same position last time (not just the one
+// exercise-wide "probably time to add weight" banner).
+function compareLabel(cmp) {
+  if (!cmp) return null
+  const kg = Math.round(cmp.lastKg * 10) / 10
+  switch (cmp.status) {
+    case 'progressing':
+      return `↑ Up from ${kg}kg last time`
+    case 'regressed':
+      return `↓ Down from ${kg}kg last time`
+    case 'target-hit':
+      return `🎯 Target reps hit`
+    case 'building':
+      return `↑ ${cmp.lastReps} reps last time — building`
+    case 'below-last':
+      return `↓ Fewer reps than last time (${cmp.lastReps})`
+    case 'holding':
+      return `Same as last time`
+    default:
+      return null
+  }
+}
+
+function bodyweightChipState(s, latestBodyweight) {
+  if (!latestBodyweight) return null
+  if (s.weight === '') return 'available'
+  const bwKg = toKg(Number(latestBodyweight.weight), latestBodyweight.unit)
+  const curKg = toKg(Number(s.weight), s.unit)
+  if (Number.isFinite(curKg) && Math.abs(curKg - bwKg) < 0.01) return 'active'
+  return 'mismatched'
+}
+
+function weightWarning(s, bestSet) {
+  if (s.weight === '') return null
+  const w = Number(s.weight)
+  if (!Number.isFinite(w)) return null
+  if (w === 0) {
+    return 'Leave weight blank if there\u2019s no added weight — or enter your own weight if this is a bodyweight exercise.'
+  }
+  if (bestSet) {
+    const bestKg = toKg(Number(bestSet.weight), bestSet.unit)
+    const thisKg = toKg(w, s.unit)
+    if (bestKg > 0 && thisKg > bestKg * 2.5) {
+      return `That's well above your previous best of ${bestSet.weight}${bestSet.unit === 'lbs' ? 'lb' : 'kg'} for this exercise — just checking it's not a typo.`
+    }
+  }
+  return null
+}
+
+// inputMode="decimal" only hints at which mobile keyboard to show - it
+// never actually blocks a physical keyboard, paste, or some on-screen
+// keyboards from entering letters. This is the real guard: strips
+// anything that isn't a digit, keeping at most one decimal point.
+function sanitizeWeightInput(raw) {
+  let cleaned = raw.replace(/[^\d.]/g, '')
+  const firstDot = cleaned.indexOf('.')
+  if (firstDot !== -1) {
+    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '')
+  }
+  return cleaned
+}
+
+// Reps are always a whole number - no decimal point needed at all.
+function sanitizeRepsInput(raw) {
+  return raw.replace(/[^\d]/g, '')
+}
+
+// Once a timed hold crosses a minute, raw seconds alone (e.g. "79")
+// isn't immediately readable - this gives the human breakdown to show
+// alongside it ("1min 19sec"). Only used for display, never for what's
+// actually stored in reps (which stays a plain integer count of
+// seconds, so volume/best/average math elsewhere keeps working
+// unchanged).
+function formatSecondsReadable(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  if (m === 0) return null
+  return `${m}min ${s}sec`
+}
 
 function historySet(histSet) {
   return {
@@ -77,6 +205,7 @@ function toModel(workout) {
     // (blankExercise, elsewhere) starts open.
     collapsed: true,
     notes: ex.notes || '',
+    superset: ex.superset_group || null,
     sets: ex.sets.map((s) => ({
       k: nextKey(),
       weight: s.weight ?? '',
@@ -86,6 +215,8 @@ function toModel(workout) {
       side: s.side || null,
       feel: s.feel || '',
       warmup: Boolean(s.warmup),
+      noWeight: false,
+      timedReps: false,
     })),
   }))
 }
@@ -95,7 +226,7 @@ function readDraft(target) {
   return d && d.target === target ? d : null
 }
 
-export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, autoResumeDraft, onClose, onSaved }) {
+export default function WorkoutEditor({ user, workout, workouts, exerciseNames, defaultUnit, autoResumeDraft, initialExercises, latestBodyweight, onClose, onSaved }) {
   const target = workout?.id ?? 'new'
   // The k1/k2/... exercise keys are the same on every single page load
   // (the counter restarts each time), so a name built only from them is
@@ -175,7 +306,13 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   }
 
   const [notes, setNotes] = useState(workout?.notes ?? '')
-  const [exercises, setExercises] = useState(() => (workout ? toModel(workout) : [blankExercise(defaultUnit)]))
+  const [exercises, setExercises] = useState(() => {
+    if (workout) return toModel(workout)
+    if (initialExercises && initialExercises.length > 0) {
+      return initialExercises.map((name) => ({ ...blankExercise(defaultUnit), name }))
+    }
+    return [blankExercise(defaultUnit)]
+  })
   // Snapshot of every set-key that existed the moment this editor opened
   // - only meaningful when editing an already-saved workout. Lets us
   // tell "genuinely new activity added during this edit" (a fresh
@@ -207,6 +344,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // Which exercise's name field currently has a live-suggestions
   // dropdown open beneath it - only ever one at a time.
   const [suggestFor, setSuggestFor] = useState(null)
+  // Which set's timer/stopwatch modal is currently open (holds both the
+  // exercise key and set key, since sets are only unique within an
+  // exercise) - only ever one at a time.
+  const [timerFor, setTimerFor] = useState(null)
+  const supersetLabelByKey = useMemo(() => supersetLabels(exercises), [exercises])
   const [targets, setTargets] = useState({}) // { 'exercise name lowercase': targetReps }
 
   useEffect(() => {
@@ -251,7 +393,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setExercises((list) =>
       list.map((ex) => {
         if (ex.name.trim().toLowerCase() !== key) return ex
-        let side = 'L'
+        let side = 'R'
         return {
           ...ex,
           sets: ex.sets.map((s) => {
@@ -359,14 +501,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     setDate(draft.date)
     setNotes(draft.notes)
     setExercises(draft.exercises.map((ex) => ({ ...ex, k: nextKey(), sets: ex.sets.map((s) => ({ ...s, k: nextKey() })) })))
-    // The clock previously had no way to reflect a resumed session's
-    // real start time - it was locked in at page-load the instant this
-    // component mounted, before Resume was ever tapped. Restoring both
-    // together is what actually fixes the "starts from 0" bug, not just
-    // bringing the sets back.
+    // The clock has two parts: WHERE it's anchored, and WHETHER it's
+    // even visible/ticking at all (liveActivityDetected - false by
+    // default for an existing workout). Restoring only the anchor
+    // fixed the "resumes from 0" bug for a brand new session, but for
+    // reopening an EXISTING workout, the clock stayed hidden until some
+    // unrelated new activity happened to flip liveActivityDetected on
+    // its own - which is why it only "worked" after adding another
+    // exercise. Resuming a draft always means real activity WAS
+    // happening, so this now turns the clock on directly, matching
+    // exactly what markLiveActivity() would have done.
     if (draft.startedAt) {
       setStartedAt(draft.startedAt)
       setClockAnchorMs(new Date(draft.startedAt).getTime())
+      setLiveActivityDetected(true)
+    } else {
+      // Older draft saved before startedAt was tracked - no precise
+      // original start time to restore, so fall back to the same
+      // mechanism already used for "reopen a same-day session and add
+      // new activity". Less precise, but still correct and live.
+      markLiveActivity()
     }
     dirtyRef.current = true
     setDraft(null)
@@ -430,6 +584,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     updateSet(exK, setK, { warmup: !currentWarmup })
   }
 
+  function toggleNoWeight(exK, setK, currentNoWeight) {
+    updateSet(exK, setK, { noWeight: !currentNoWeight, weight: '' })
+  }
+
   const oppositeSide = (s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null)
 
   function addSet(exK) {
@@ -466,6 +624,22 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     touch()
     markLiveActivity()
     setExercises((list) => [...list, blankExercise(defaultUnit)])
+  }
+
+  function linkWithPrevious(exK) {
+    touch()
+    setExercises((list) => {
+      const idx = list.findIndex((e) => e.k === exK)
+      if (idx <= 0) return list
+      const prev = list[idx - 1]
+      const groupKey = prev.superset || `g${nextKey()}`
+      return list.map((e, i) => (i === idx || i === idx - 1) ? { ...e, superset: groupKey } : e)
+    })
+  }
+
+  function unlinkSuperset(exK) {
+    touch()
+    setExercises((list) => list.map((e) => (e.k === exK ? { ...e, superset: null } : e)))
   }
 
   function removeExercise(exK) {
@@ -508,6 +682,19 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
     }
   }
 
+  async function saveAsTemplate() {
+    const names = exercises.map((ex) => ex.name.trim()).filter(Boolean)
+    if (names.length === 0) return
+    const name = window.prompt('Name this template (e.g. "Push Day A")')
+    if (!name || !name.trim()) return
+    try {
+      await saveTemplate(user.id, name.trim(), names)
+      window.alert(`Saved "${name.trim()}" as a template.`)
+    } catch (e) {
+      window.alert('Could not save the template. Check your connection and try again.')
+    }
+  }
+
   async function save() {
     setError('')
 
@@ -515,6 +702,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
       .map((ex) => ({
         name: ex.name.trim(),
         notes: ex.notes.trim() || null,
+        superset: ex.superset || null,
         sets: ex.sets
           .filter((s) => s.weight !== '' || s.reps !== '')
           .map((s) => {
@@ -652,7 +840,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
         const bestSet = ex.name.trim() ? bestSetEver(workouts, ex.name, workout?.id) : null
         const avgReps = ex.name.trim() ? averageRepsEver(workouts, ex.name, workout?.id) : null
         const avgWeight = ex.name.trim() ? averageWeightEver(workouts, ex.name, workout?.id) : null
-        const targetInfo = targets[ex.name.trim().toLowerCase()] || null
+        const targetInfo = ex.name.trim() ? targets[ex.name.trim().toLowerCase()] || null : null
         // Sides tracking is only ever on because the user deliberately
         // turned it on for this exercise (persisted trackSides flag) -
         // never inferred from a stray leftover `side` value carried in
@@ -672,7 +860,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           ? validSets.reduce((best, st) => (Number(st.weight) > Number(best.weight) ? st : best), validSets[0])
           : null
         return (
-        <div className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`} key={ex.k}>
+        <div
+          className={`exercise-block ${ex.collapsed ? 'exercise-block-collapsed' : ''}`}
+          style={supersetLabelByKey.get(ex.k) ? { borderLeft: `3px solid ${supersetColor(supersetLabelByKey.get(ex.k))}` } : undefined}
+          key={ex.k}
+        >
           {ex.collapsed ? (
             <div className="exercise-collapsed-row">
               {CollapsedPic && (
@@ -681,7 +873,17 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                 </span>
               )}
               <span className="exercise-collapsed-text">
-                <span className="exercise-collapsed-name">{ex.name || `Exercise ${exIdx + 1}`}</span>
+                <span className="exercise-collapsed-name">
+                  {supersetLabelByKey.get(ex.k) && (
+                    <span
+                      className="superset-badge superset-badge-sm"
+                      style={{ background: supersetColor(supersetLabelByKey.get(ex.k)) + '33', color: supersetColor(supersetLabelByKey.get(ex.k)) }}
+                    >
+                      {supersetLabelByKey.get(ex.k)}
+                    </span>
+                  )}
+                  {ex.name || `Exercise ${exIdx + 1}`}
+                </span>
                 <span className="exercise-collapsed-meta">
                   {validSets.length} set{validSets.length === 1 ? '' : 's'}
                   {summaryBest ? ` · best ${summaryBest.weight}${summaryBest.unit === 'lbs' ? 'lb' : 'kg'}×${summaryBest.reps}` : ''}
@@ -696,6 +898,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               {ExPic && (
                 <span className="exercise-thumb" style={{ background: exColor + '26' }}>
                   <ExPic width="30" height="30" />
+                </span>
+              )}
+              {supersetLabelByKey.get(ex.k) && (
+                <span
+                  className="superset-badge"
+                  style={{ background: supersetColor(supersetLabelByKey.get(ex.k)) + '33', color: supersetColor(supersetLabelByKey.get(ex.k)) }}
+                  title="Linked as a superset"
+                >
+                  {supersetLabelByKey.get(ex.k)}
                 </span>
               )}
               <div className="name-input-wrap">
@@ -717,6 +928,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               )}
               <button className="btn btn-ghost" onClick={() => removeExercise(ex.k)} aria-label="Remove exercise">✕</button>
             </div>
+
+            {(() => {
+              const prev = exIdx > 0 ? exercises[exIdx - 1] : null
+              const alreadyLinkedToPrev = prev && ex.superset && ex.superset === prev.superset
+              if (ex.superset) {
+                return (
+                  <button className="text-link-btn" onClick={() => unlinkSuperset(ex.k)}>
+                    Unlink from superset
+                  </button>
+                )
+              }
+              if (prev && !alreadyLinkedToPrev) {
+                return (
+                  <button className="text-link-btn" onClick={() => linkWithPrevious(ex.k)}>
+                    Link as superset with "{prev.name.trim() || `Exercise ${exIdx}`}"
+                  </button>
+                )
+              }
+              return null
+            })()}
 
             {suggestFor === ex.k && ex.name.trim() && (() => {
               const results = searchExercises(ex.name.trim()).slice(0, 6)
@@ -790,9 +1021,12 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               ) : <span className="small">No history for this exercise yet</span>}
               {lastSession && (
                 <span className="small">
-                  Last time: {lastSession.sets.map((s, idx) => (
-                    <span key={idx}>{idx > 0 ? ', ' : ''}{s.weight ?? '–'}{s.unit === 'lbs' ? 'lb' : 'kg'}×{s.reps ?? '–'}</span>
-                  ))}
+                  Last time ({fmtDate(lastSession.date)}): {lastSession.sets.map((s, idx) => {
+                    const feelEmoji = FEELS.find((f) => f.value === s.feel)?.emoji
+                    return (
+                      <span key={idx}>{idx > 0 ? ', ' : ''}{s.weight ?? '–'}{s.unit === 'lbs' ? 'lb' : 'kg'}×{s.reps ?? '–'}{feelEmoji ? ` ${feelEmoji}` : ''}</span>
+                    )
+                  })}
                 </span>
               )}
             </div>
@@ -846,13 +1080,35 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             const customFeel = s.feel && !FEEL_VALUES.includes(s.feel)
             return (
               <div key={s.k}>
-                <button
-                  className={`chip warmup-chip ${s.warmup ? 'on' : ''}`}
-                  onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
-                >
-                  {s.warmup ? '✓ Warm-up set' : 'Warm-up set?'}
-                </button>
-                <div className="set-row">
+                <div className="set-actions-row">
+                  <button
+                    className={`chip warmup-chip ${s.warmup ? 'on' : ''}`}
+                    onClick={() => toggleWarmup(ex.k, s.k, s.warmup)}
+                  >
+                    {s.warmup ? '✓ Warm-up set' : 'Warm-up set?'}
+                  </button>
+                  <button
+                    className={`chip ${s.noWeight ? 'on' : ''}`}
+                    onClick={() => toggleNoWeight(ex.k, s.k, s.noWeight)}
+                  >
+                    {s.noWeight ? '✓ No weight' : 'No weight'}
+                  </button>
+                  {!s.noWeight && latestBodyweight && (() => {
+                    const bwState = bodyweightChipState(s, latestBodyweight)
+                    return (
+                      <button
+                        className={`chip ${bwState === 'active' ? 'on' : ''} ${bwState === 'mismatched' ? 'chip-not-applied' : ''}`}
+                        onClick={() => updateSet(ex.k, s.k, { weight: String(latestBodyweight.weight), unit: latestBodyweight.unit })}
+                      >
+                        Bodyweight
+                      </button>
+                    )
+                  })()}
+                  <button className="chip" onClick={() => setTimerFor({ exK: ex.k, setK: s.k })}>
+                    Timer
+                  </button>
+                </div>
+                <div className={`set-row ${s.timedReps ? 'set-row-has-hint' : ''}`}>
                   <span className={`set-index ${s.warmup ? 'set-index-warmup' : ''}`}>
                     {s.warmup ? `W${i + 1}` : i + 1}
                   </span>
@@ -865,10 +1121,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     autoCapitalize="off"
                     spellCheck="false"
                     name={`weight-${s.k}`}
-                    placeholder="weight"
+                    placeholder={s.noWeight ? 'no weight' : 'weight'}
                     aria-label={`Set ${i + 1} weight`}
                     value={s.weight}
-                    onChange={(e) => updateSet(ex.k, s.k, { weight: e.target.value })}
+                    disabled={s.noWeight}
+                    onChange={(e) => updateSet(ex.k, s.k, { weight: sanitizeWeightInput(e.target.value) })}
                   />
                   <button
                     className="mini-btn"
@@ -878,33 +1135,50 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     {s.unit === 'kg' ? 'kg' : 'lb'}
                   </button>
                   <span className="times">×</span>
-                  <input
-                    className="input"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck="false"
-                    name={`reps-${s.k}`}
-                    placeholder="reps"
-                    aria-label={`Set ${i + 1} reps`}
-                    value={s.reps}
-                    onChange={(e) => updateSet(ex.k, s.k, { reps: e.target.value })}
-                  />
+                  <div className="reps-input-wrap">
+                    <input
+                      className={`input ${s.timedReps ? 'reps-input-timed' : ''}`}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                      name={`reps-${s.k}`}
+                      placeholder="reps"
+                      aria-label={`Set ${i + 1} reps`}
+                      value={s.reps}
+                      onChange={(e) => updateSet(ex.k, s.k, { reps: sanitizeRepsInput(e.target.value), timedReps: false })}
+                    />
+                    {s.timedReps && <span className="reps-unit-suffix" aria-hidden="true">sec</span>}
+                    {s.timedReps && (
+                      <div className="timed-reps-hint">
+                        {formatSecondsReadable(Number(s.reps)) ? `${formatSecondsReadable(Number(s.reps))} · from timer` : 'from timer'}
+                      </div>
+                    )}
+                  </div>
                   {sidesActive ? (
                     <button
-                      className={`mini-btn side-btn on ${s.side === 'R' ? 'side-r' : 'side-l'}`}
+                      className={`mini-btn side-btn ${s.side ? `on ${s.side === 'R' ? 'side-r' : 'side-l'}` : 'side-unset'}`}
                       onClick={() => updateSet(ex.k, s.k, { side: s.side === 'R' ? 'L' : 'R' })}
-                      aria-label={`Side: ${s.side === 'R' ? 'right' : 'left'} — tap to switch`}
+                      aria-label={s.side ? `Side: ${s.side === 'R' ? 'right' : 'left'} — tap to switch` : 'Side not set — tap to choose left or right'}
                     >
-                      {s.side === 'R' ? 'R' : 'L'}
+                      {s.side || '?'}
                     </button>
                   ) : (
                     <span className="side-slot-spacer" aria-hidden="true" />
                   )}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>✕</button>
                 </div>
+                {weightWarning(s, bestSet) && (
+                  <div className="field-hint weight-warning">{weightWarning(s, bestSet)}</div>
+                )}
+                {!s.warmup && !s.noWeight && (() => {
+                  const cmp = compareSet(s, lastSession?.sets?.[i], targetReps)
+                  const label = compareLabel(cmp)
+                  if (!label) return null
+                  return <div className={`set-compare set-compare-${cmp.status}`}>{label}</div>
+                })()}
                 <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
                   {customFeel ? (
@@ -964,10 +1238,26 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
             Delete workout
           </button>
         )}
+        {exercises.some((ex) => ex.name.trim()) && (
+          <button className="btn btn-ghost" onClick={saveAsTemplate} disabled={saving}>
+            Save as template
+          </button>
+        )}
         <button className="btn btn-primary btn-block" onClick={save} disabled={saving}>
           {saving ? 'Finishing…' : 'Finish workout'}
         </button>
       </div>
+
+      {timerFor && (
+        <TimerModal
+          onClose={() => setTimerFor(null)}
+          onUseAsReps={(seconds) => {
+            touch()
+            updateSet(timerFor.exK, timerFor.setK, { reps: String(seconds), timedReps: true })
+            setTimerFor(null)
+          }}
+        />
+      )}
     </div>
   )
 }

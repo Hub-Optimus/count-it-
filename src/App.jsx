@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, configured } from './lib/supabase'
-import { fetchWorkouts, fetchProfile, mergeWorkouts } from './lib/db'
+import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates, fetchBodyMetrics } from './lib/db'
 import { todayISO } from './lib/format'
 import { peekDraft } from './lib/draft'
 import TabBar, { Tally } from './components/TabBar'
@@ -133,6 +133,23 @@ function Main({ user }) {
     withJwtRetry(() => fetchProfile(user.id)).then(setProfile).catch(() => setProfile(null))
   }, [user.id])
 
+  const [templates, setTemplates] = useState([])
+  const reloadTemplates = useCallback(() => {
+    withJwtRetry(() => fetchTemplates(user.id)).then(setTemplates).catch(() => {})
+  }, [user.id])
+  useEffect(() => { reloadTemplates() }, [reloadTemplates])
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
+
+  // Most recent logged bodyweight - lets the weight field offer a
+  // one-tap "use my bodyweight" fill for bodyweight-loaded exercises
+  // (pull-ups etc.), instead of having to remember and retype it.
+  const [latestBodyweight, setLatestBodyweight] = useState(null)
+  useEffect(() => {
+    withJwtRetry(() => fetchBodyMetrics(user.id))
+      .then((rows) => setLatestBodyweight(rows[0] ? { weight: rows[0].weight, unit: rows[0].weight_unit } : null))
+      .catch(() => {})
+  }, [user.id])
+
   const exerciseNames = useMemo(() => {
     if (!workouts) return []
     const freq = new Map()
@@ -210,6 +227,10 @@ function Main({ user }) {
         return
       }
     }
+    if (templates.length > 0) {
+      setShowTemplatePicker(true)
+      return
+    }
     setEditor({ workout: null })
   }
 
@@ -234,8 +255,10 @@ function Main({ user }) {
         exerciseNames={exerciseNames}
         defaultUnit={defaultUnit}
         autoResumeDraft={Boolean(editor.autoResumeDraft)}
-        onClose={() => setEditor(null)}
-        onSaved={() => { setEditor(null); load() }}
+        initialExercises={editor.initialExercises}
+        latestBodyweight={latestBodyweight}
+        onClose={() => { setEditor(null); reloadTemplates() }}
+        onSaved={() => { setEditor(null); load(); reloadTemplates() }}
       />
     )
   }
@@ -250,6 +273,38 @@ function Main({ user }) {
           <button className="btn btn-block version-banner-btn" onClick={() => window.location.reload()}>
             Refresh to update
           </button>
+        </div>
+      )}
+      {showTemplatePicker && (
+        <div className="template-picker-overlay" onClick={() => setShowTemplatePicker(false)}>
+          <div className="template-picker" onClick={(e) => e.stopPropagation()}>
+            <div className="template-picker-header">
+              <h2>Start from a template?</h2>
+              <button className="btn btn-ghost" onClick={() => setShowTemplatePicker(false)}>Cancel</button>
+            </div>
+            {templates.map((t) => (
+              <button
+                key={t.id}
+                className="template-picker-row"
+                onClick={() => {
+                  setShowTemplatePicker(false)
+                  setEditor({ workout: null, initialExercises: t.exerciseNames })
+                }}
+              >
+                <span className="template-picker-name">{t.name}</span>
+                <span className="template-picker-count">{t.exerciseNames.length} exercises</span>
+              </button>
+            ))}
+            <button
+              className="btn btn-block template-picker-blank"
+              onClick={() => {
+                setShowTemplatePicker(false)
+                setEditor({ workout: null })
+              }}
+            >
+              Start blank instead
+            </button>
+          </div>
         </div>
       )}
       <TabBar tab={tab} onChange={setTab} user={user} sessionCount={workouts?.length} />

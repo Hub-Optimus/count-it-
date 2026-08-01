@@ -40,8 +40,28 @@ function durationMinutes(workout) {
 const STANDARD_REST_SECONDS = 90
 
 function estimatedRestMinutes(workout, totalDurationMinutes) {
-  const totalSets = workout.exercises.reduce((n, ex) => n + ex.sets.length, 0)
-  const gaps = Math.max(0, totalSets - 1)
+  // Exercises linked as a superset are done back-to-back with ~0 real
+  // rest between them - only counting a rest gap between completed
+  // ROUNDS of the group (using its largest member's set count), not
+  // between every individual set the way an unlinked exercise does.
+  const groups = new Map()
+  const solo = []
+  for (const ex of workout.exercises) {
+    if (ex.superset_group) {
+      if (!groups.has(ex.superset_group)) groups.set(ex.superset_group, [])
+      groups.get(ex.superset_group).push(ex)
+    } else {
+      solo.push(ex)
+    }
+  }
+
+  let gaps = 0
+  for (const ex of solo) gaps += Math.max(0, ex.sets.length - 1)
+  for (const members of groups.values()) {
+    const rounds = Math.max(...members.map((ex) => ex.sets.length))
+    gaps += Math.max(0, rounds - 1)
+  }
+
   const rawMinutes = Math.round((gaps * STANDARD_REST_SECONDS) / 60)
   if (totalDurationMinutes == null) return rawMinutes
   return Math.min(rawMinutes, totalDurationMinutes)
