@@ -699,8 +699,14 @@ input[type='date'].input { color-scheme: dark; }
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 10px;
+}
+
+.set-actions-row .chip {
+  padding: 6px 9px;
+  min-height: 32px;
+  font-weight: 500;
 }
 
 .warmup-chip.on {
@@ -710,6 +716,8 @@ input[type='date'].input { color-scheme: dark; }
 }
 
 .weight-warning { color: var(--yellow); margin-bottom: 8px; }
+
+.timed-reps-hint { color: var(--blue); margin-bottom: 8px; }
 
 .superset-badge {
   flex: none;
