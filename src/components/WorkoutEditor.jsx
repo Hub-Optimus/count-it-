@@ -4,7 +4,7 @@ import { todayISO, toKg, fmtDate } from '../lib/format'
 import { pictogramFor, exactPictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import TimerModal from './TimerModal'
-import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
+import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime, compareSet } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
 // Simple, scalable clock glyph for the Workout Duration card - clean line
@@ -97,6 +97,31 @@ function supersetColor(label) {
 // bodyweight), or "mismatched" (something else is filled in right
 // now - still tappable to switch, but visually marked as not the
 // currently-applied value).
+// Plain-language labels for compareSet()'s statuses - shown as a small
+// line right under a set, giving an at-a-glance read on how THIS set
+// compares to the same position last time (not just the one
+// exercise-wide "probably time to add weight" banner).
+function compareLabel(cmp) {
+  if (!cmp) return null
+  const kg = Math.round(cmp.lastKg * 10) / 10
+  switch (cmp.status) {
+    case 'progressing':
+      return `↑ Up from ${kg}kg last time`
+    case 'regressed':
+      return `↓ Down from ${kg}kg last time`
+    case 'target-hit':
+      return `🎯 Target reps hit`
+    case 'building':
+      return `↑ ${cmp.lastReps} reps last time — building`
+    case 'below-last':
+      return `↓ Fewer reps than last time (${cmp.lastReps})`
+    case 'holding':
+      return `Same as last time`
+    default:
+      return null
+  }
+}
+
 function bodyweightChipState(s, latestBodyweight) {
   if (!latestBodyweight) return null
   if (s.weight === '') return 'available'
@@ -107,7 +132,7 @@ function bodyweightChipState(s, latestBodyweight) {
 }
 
 function weightWarning(s, bestSet) {
-  if (s.weight === '' || s.reps === '') return null
+  if (s.weight === '') return null
   const w = Number(s.weight)
   if (!Number.isFinite(w)) return null
   if (w === 0) {
@@ -139,6 +164,19 @@ function sanitizeWeightInput(raw) {
 // Reps are always a whole number - no decimal point needed at all.
 function sanitizeRepsInput(raw) {
   return raw.replace(/[^\d]/g, '')
+}
+
+// Once a timed hold crosses a minute, raw seconds alone (e.g. "79")
+// isn't immediately readable - this gives the human breakdown to show
+// alongside it ("1min 19sec"). Only used for display, never for what's
+// actually stored in reps (which stays a plain integer count of
+// seconds, so volume/best/average math elsewhere keeps working
+// unchanged).
+function formatSecondsReadable(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  if (m === 0) return null
+  return `${m}min ${s}sec`
 }
 
 function historySet(histSet) {
@@ -1070,7 +1108,7 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     Timer
                   </button>
                 </div>
-                <div className="set-row">
+                <div className={`set-row ${s.timedReps ? 'set-row-has-hint' : ''}`}>
                   <span className={`set-index ${s.warmup ? 'set-index-warmup' : ''}`}>
                     {s.warmup ? `W${i + 1}` : i + 1}
                   </span>
@@ -1113,6 +1151,11 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                       onChange={(e) => updateSet(ex.k, s.k, { reps: sanitizeRepsInput(e.target.value), timedReps: false })}
                     />
                     {s.timedReps && <span className="reps-unit-suffix" aria-hidden="true">sec</span>}
+                    {s.timedReps && (
+                      <div className="timed-reps-hint">
+                        {formatSecondsReadable(Number(s.reps)) ? `${formatSecondsReadable(Number(s.reps))} · from timer` : 'from timer'}
+                      </div>
+                    )}
                   </div>
                   {sidesActive ? (
                     <button
@@ -1127,12 +1170,15 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   )}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>✕</button>
                 </div>
-                {s.timedReps && (
-                  <div className="field-hint timed-reps-hint">from timer</div>
-                )}
                 {weightWarning(s, bestSet) && (
                   <div className="field-hint weight-warning">{weightWarning(s, bestSet)}</div>
                 )}
+                {!s.warmup && !s.noWeight && (() => {
+                  const cmp = compareSet(s, lastSession?.sets?.[i], targetReps)
+                  const label = compareLabel(cmp)
+                  if (!label) return null
+                  return <div className={`set-compare set-compare-${cmp.status}`}>{label}</div>
+                })()}
                 <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
                   {customFeel ? (
