@@ -731,7 +731,18 @@ input[type='date'].input { color-scheme: dark; }
 
 .weight-warning { color: var(--yellow); margin-bottom: 8px; }
 
-.timed-reps-hint { color: var(--blue); margin-bottom: 8px; }
+.timed-reps-hint {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 3px;
+  color: var(--blue);
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.set-row-has-hint { margin-bottom: 22px; }
 
 .superset-badge {
   flex: none;
