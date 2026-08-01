@@ -543,6 +543,20 @@ input[type='date'].input { color-scheme: dark; }
 
 .name-input { padding-left: 36px; }
 
+.reps-input-wrap { position: relative; }
+
+.reps-input-timed { padding-right: 24px; }
+
+.reps-unit-suffix {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--blue);
+  pointer-events: none;
+}
+
 .name-suggestions {
   background: var(--card-2);
   border: 1px solid var(--line);
