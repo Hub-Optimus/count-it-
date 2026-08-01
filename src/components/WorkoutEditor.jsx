@@ -3,6 +3,7 @@ import { insertFullWorkout, updateFullWorkout, deleteWorkout, fetchExerciseTarge
 import { todayISO, toKg, fmtDate } from '../lib/format'
 import { pictogramFor, exactPictogramFor, groupFor, GROUP_COLOR, searchExercises } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
+import TimerModal from './TimerModal'
 import { lastSessionFor, bestSetEver, averageRepsEver, averageWeightEver, hitTargetLastTime } from '../lib/setComparison'
 import { peekDraft, clearDraft, DRAFT_KEY } from '../lib/draft'
 
@@ -78,6 +79,31 @@ function supersetColor(label) {
   if (!label) return null
   const letterIndex = label.charCodeAt(0) - 65
   return SUPERSET_COLORS[letterIndex % SUPERSET_COLORS.length]
+}
+
+// Gentle, non-blocking sanity check on a set's weight - never blocks
+// saving, just surfaces the two most common real mistakes: typing a
+// literal "0" (almost always meant to be left blank, or meant to be
+// the person's own bodyweight for a bodyweight-loaded exercise like
+// pull-ups) and a weight wildly higher than that exercise's own past
+// best (likely a typo, e.g. 500 instead of 50 - compared against the
+// exercise's OWN history, not a fixed number, since "500" is normal
+// for a leg press and absurd for a curl).
+function weightWarning(s, bestSet) {
+  if (s.weight === '' || s.reps === '') return null
+  const w = Number(s.weight)
+  if (!Number.isFinite(w)) return null
+  if (w === 0) {
+    return 'Leave weight blank if there\u2019s no added weight — or enter your own weight if this is a bodyweight exercise.'
+  }
+  if (bestSet) {
+    const bestKg = toKg(Number(bestSet.weight), bestSet.unit)
+    const thisKg = toKg(w, s.unit)
+    if (bestKg > 0 && thisKg > bestKg * 2.5) {
+      return `That's well above your previous best of ${bestSet.weight}${bestSet.unit === 'lbs' ? 'lb' : 'kg'} for this exercise — just checking it's not a typo.`
+    }
+  }
+  return null
 }
 
 function historySet(histSet) {
@@ -243,6 +269,10 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
   // Which exercise's name field currently has a live-suggestions
   // dropdown open beneath it - only ever one at a time.
   const [suggestFor, setSuggestFor] = useState(null)
+  // Which set's timer/stopwatch modal is currently open (holds both the
+  // exercise key and set key, since sets are only unique within an
+  // exercise) - only ever one at a time.
+  const [timerFor, setTimerFor] = useState(null)
   const supersetLabelByKey = useMemo(() => supersetLabels(exercises), [exercises])
   const [targets, setTargets] = useState({}) // { 'exercise name lowercase': targetReps }
 
@@ -825,14 +855,14 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
               const alreadyLinkedToPrev = prev && ex.superset && ex.superset === prev.superset
               if (ex.superset) {
                 return (
-                  <button className="superset-link-action" onClick={() => unlinkSuperset(ex.k)}>
+                  <button className="text-link-btn" onClick={() => unlinkSuperset(ex.k)}>
                     Unlink from superset
                   </button>
                 )
               }
               if (prev && !alreadyLinkedToPrev) {
                 return (
-                  <button className="superset-link-action" onClick={() => linkWithPrevious(ex.k)}>
+                  <button className="text-link-btn" onClick={() => linkWithPrevious(ex.k)}>
                     Link as superset with "{prev.name.trim() || `Exercise ${exIdx}`}"
                   </button>
                 )
@@ -1027,6 +1057,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                   )}
                   <button className="remove-set" onClick={() => removeSet(ex.k, s.k)} aria-label={`Remove set ${i + 1}`}>✕</button>
                 </div>
+                {weightWarning(s, bestSet) && (
+                  <div className="field-hint weight-warning">{weightWarning(s, bestSet)}</div>
+                )}
                 <div className="set-feel-label">How did it feel?</div>
                 <div className="set-feel">
                   {customFeel ? (
@@ -1048,6 +1081,9 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
                     ))
                   )}
                 </div>
+                <button className="text-link-btn" onClick={() => setTimerFor({ exK: ex.k, setK: s.k })}>
+                  ⏱ Time this set
+                </button>
               </div>
             )
           })}
@@ -1095,6 +1131,17 @@ export default function WorkoutEditor({ user, workout, workouts, exerciseNames, 
           {saving ? 'Finishing…' : 'Finish workout'}
         </button>
       </div>
+
+      {timerFor && (
+        <TimerModal
+          onClose={() => setTimerFor(null)}
+          onUseAsReps={(seconds) => {
+            touch()
+            updateSet(timerFor.exK, timerFor.setK, { reps: String(seconds) })
+            setTimerFor(null)
+          }}
+        />
+      )}
     </div>
   )
 }
