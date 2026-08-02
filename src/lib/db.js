@@ -1,8 +1,11 @@
 import { supabase } from './supabase'
+import { testMock } from './testMock'
 
 // Fetch every workout for the signed-in user, newest first,
 // with nested exercises and sets (sorted client-side by position).
 export async function fetchWorkouts() {
+  const mock = testMock()
+  if (mock) return mock.workouts ?? []
   const { data, error } = await supabase
     .from('workouts')
     .select('id, date, split, notes, started_at, finished_at, exercises(id, name, notes, position, superset_group, sets(id, weight, unit, reps, per_side, side, feel, warmup, position))')
@@ -49,6 +52,11 @@ export async function insertChildren(userId, workoutId, exercises) {
 }
 
 export async function insertFullWorkout(userId, { date, split, notes, exercises, startedAt, finishedAt }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { date, split, notes, exercises, startedAt, finishedAt }
+    return 'test-workout-id'
+  }
   const { data, error } = await supabase
     .from('workouts')
     .insert({ user_id: userId, date, split, notes: notes || null, started_at: startedAt || null, finished_at: finishedAt || null })
@@ -60,6 +68,11 @@ export async function insertFullWorkout(userId, { date, split, notes, exercises,
 }
 
 export async function updateFullWorkout(userId, workoutId, { date, split, notes, exercises, startedAt, finishedAt }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { date, split, notes, exercises, startedAt, finishedAt }
+    return
+  }
   const { error } = await supabase
     .from('workouts')
     .update({ date, split, notes: notes || null, started_at: startedAt || null, finished_at: finishedAt || null })
@@ -110,6 +123,8 @@ export async function mergeWorkouts(userId, keepWorkout, mergeFromWorkout) {
 // ---- profiles (F1: goals) ----
 
 export async function fetchProfile(userId) {
+  const mock = testMock()
+  if (mock) return mock.profile ?? { goals: [], goal_note: null, height_cm: null }
   const { data, error } = await supabase
     .from('profiles')
     .select('goals, goal_note, height_cm')
@@ -138,6 +153,8 @@ export async function saveHeight(userId, heightCm) {
 // ---- body weight log ----
 
 export async function fetchBodyMetrics(userId) {
+  const mock = testMock()
+  if (mock) return mock.bodyMetrics ?? []
   const { data, error } = await supabase
     .from('body_metrics')
     .select('id, date, weight, weight_unit')
@@ -161,6 +178,8 @@ export async function deleteBodyMetric(id) {
 // ---- per-exercise rep targets (progressive overload) ----
 
 export async function fetchExerciseTargets(userId) {
+  const mock = testMock()
+  if (mock) return mock.exerciseTargets ?? {}
   const { data, error } = await supabase
     .from('exercise_targets')
     .select('exercise_name, target_reps, seed_weight, seed_weight_unit, track_sides, per_side')
@@ -209,6 +228,8 @@ export async function setPerSide(userId, exerciseName, perSide) {
 // ---- templates (named, reusable exercise lists - no locked-in numbers) ----
 
 export async function fetchTemplates(userId) {
+  const mock = testMock()
+  if (mock) return mock.templates ?? []
   const { data, error } = await supabase
     .from('templates')
     .select('id, name, exercise_names, created_at')
@@ -218,6 +239,11 @@ export async function fetchTemplates(userId) {
 }
 
 export async function saveTemplate(userId, name, exerciseNames) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { name, exerciseNames }
+    return
+  }
   const { error } = await supabase
     .from('templates')
     .insert({ user_id: userId, name, exercise_names: exerciseNames })
