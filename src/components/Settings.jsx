@@ -47,7 +47,7 @@ export default function Settings({ user, workouts, defaultUnit, onUnitChange, pr
   return (
     <div>
       <div className="card">
-        <Goals user={user} initial={profile} mode="settings" onDone={onProfileChange} />
+        <Goals user={user} initial={profile} onDone={onProfileChange} />
       </div>
 
       <div className="card">
