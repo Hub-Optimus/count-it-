@@ -39,33 +39,33 @@ test('completing all three steps saves and lands on the main app', async ({ page
   await page.goto('/test-harness.html')
   await page.waitForSelector('text=A few basics', { timeout: 10000 })
 
-  // Step 1 - Continue starts disabled until every required field is filled
+  // Step 1 - clicking Continue with nothing filled shows exactly what's missing
   const continueBtn = page.getByRole('button', { name: 'Continue' })
-  await expect(continueBtn).toBeDisabled()
+  await continueBtn.click()
+  await expect(page.locator('.error')).toContainText('Date of birth')
+  await expect(page.locator('.error')).toContainText('Sex')
+  await expect(page.locator('.error')).toContainText('Height')
+  await expect(page.locator('.error')).toContainText('Current weight')
 
   await page.locator('input[type="date"]').fill('1995-06-15')
   await page.getByRole('button', { name: 'Male', exact: true }).click()
   await page.locator('input[placeholder="e.g. 175"]').fill('178')
   await page.locator('input[placeholder="weight"]').fill('75')
-  await expect(continueBtn).toBeEnabled()
+  // Error clears as soon as the fields are filled in, before Continue is clicked again
+  await expect(page.locator('.error')).not.toBeVisible()
   await continueBtn.click()
 
   // Step 2
   await expect(page.locator('text=What are you working toward?')).toBeVisible()
   const continueBtn2 = page.getByRole('button', { name: 'Continue' })
-  await expect(continueBtn2).toBeDisabled()
 
-  // 'Build muscle' appears twice on this step: once as the new primary-goal
-  // chip, once as the existing chart-shaping goal chip further down - the
-  // primary-goal one is first in the DOM.
-  await page.getByRole('button', { name: 'Build muscle' }).first().click()
+  await page.getByRole('button', { name: 'Build muscle' }).click()
   // Weight-relevant goal picked - a target weight field should now appear
   await expect(page.locator('text=Target weight (optional)')).toBeVisible()
 
   await page.getByRole('button', { name: 'Moderate · 3-4 days/week' }).click()
   await page.getByRole('button', { name: 'Intermediate · 6 months - 2 years' }).click()
   await page.getByRole('button', { name: 'Gym' }).click()
-  await expect(continueBtn2).toBeEnabled()
   await continueBtn2.click()
 
   // Step 3 - everything optional, Finish should work with nothing filled
@@ -85,6 +85,28 @@ test('completing all three steps saves and lands on the main app', async ({ page
   const bodyMetric = await page.evaluate(() => window.__TEST_LAST_BODY_METRIC__)
   expect(bodyMetric.weight).toBe(75)
   expect(bodyMetric.weightUnit).toBe('kg')
+})
+
+test('the duplicate goal question is gone - Primary goal is the only goal question shown', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__TEST_MOCK__ = {
+      workouts: [],
+      profile: { goals: [], goal_note: null, height_cm: null, onboarding_completed_at: null },
+      templates: [], bodyMetrics: [], exerciseTargets: {},
+    }
+  })
+  await page.goto('/test-harness.html')
+  await page.waitForSelector('text=A few basics', { timeout: 10000 })
+  await page.locator('input[type="date"]').fill('1995-06-15')
+  await page.getByRole('button', { name: 'Male', exact: true }).click()
+  await page.locator('input[placeholder="e.g. 175"]').fill('178')
+  await page.locator('input[placeholder="weight"]').fill('75')
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  await expect(page.locator('text=What are you working toward?')).toBeVisible()
+  await expect(page.locator('text=What are you training for?')).not.toBeVisible()
+  // Only one 'Build muscle' chip should exist now, not two
+  await expect(page.getByRole('button', { name: 'Build muscle' })).toHaveCount(1)
 })
 
 test('a user who has already completed onboarding skips straight to the main app', async ({ page }) => {
