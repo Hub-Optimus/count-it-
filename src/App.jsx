@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, Suspense, lazy } from 'react'
 import { supabase, configured } from './lib/supabase'
 import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates, fetchBodyMetrics } from './lib/db'
 import { todayISO } from './lib/format'
@@ -7,12 +7,18 @@ import TabBar, { Tally } from './components/TabBar'
 import Auth from './components/Auth'
 import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
-import Progress from './components/Progress'
-import Trends from './components/Trends'
-import GoalProgress from './components/GoalProgress'
-import Settings from './components/Settings'
-import Goals from './components/Goals'
 import SidePanel from './components/SidePanel'
+
+// Lazy: these are only needed once someone actually navigates away from
+// the primary logging tab (or, for Goals, during one-time onboarding) -
+// no reason to make everyone download them on first load just to log a
+// set. WorkoutEditor/WorkoutList/SidePanel stay eager since they're
+// what nearly every visit actually needs immediately.
+const Progress = lazy(() => import('./components/Progress'))
+const Trends = lazy(() => import('./components/Trends'))
+const GoalProgress = lazy(() => import('./components/GoalProgress'))
+const Settings = lazy(() => import('./components/Settings'))
+const Goals = lazy(() => import('./components/Goals'))
 
 const UNIT_KEY = 'countit-unit'
 
@@ -62,7 +68,7 @@ export default function App() {
   return <Main user={session.user} />
 }
 
-function Main({ user }) {
+export function Main({ user }) {
   const [tab, setTab] = useState('log')
   const [workouts, setWorkouts] = useState(null) // null = loading
   const [loadError, setLoadError] = useState('')
@@ -243,7 +249,11 @@ function Main({ user }) {
   }
 
   if (profile === null) {
-    return <Goals user={user} initial={null} mode="onboard" onDone={setProfile} />
+    return (
+      <Suspense fallback={<p className="empty">Loading…</p>}>
+        <Goals user={user} initial={null} mode="onboard" onDone={setProfile} />
+      </Suspense>
+    )
   }
 
   if (editor) {
@@ -362,14 +372,16 @@ function Main({ user }) {
       )}
 
       {tab === 'settings' && (
-        <Settings
-          user={user}
-          workouts={workouts ?? []}
-          defaultUnit={defaultUnit}
-          onUnitChange={changeUnit}
-          profile={profile}
-          onProfileChange={setProfile}
-        />
+        <Suspense fallback={<p className="empty">Loading…</p>}>
+          <Settings
+            user={user}
+            workouts={workouts ?? []}
+            defaultUnit={defaultUnit}
+            onUnitChange={changeUnit}
+            profile={profile}
+            onProfileChange={setProfile}
+          />
+        </Suspense>
       )}
       </div>
       <SidePanel workouts={workouts ?? []} profile={profile} />
@@ -386,9 +398,11 @@ function ProgressTab({ user, workouts, profile }) {
         <button className={`chip ${view === 'trends' ? 'on' : ''}`} onClick={() => setView('trends')}>Trends</button>
         <button className={`chip ${view === 'exercise' ? 'on' : ''}`} onClick={() => setView('exercise')}>Per exercise</button>
       </div>
-      {view === 'goals' && <GoalProgress user={user} workouts={workouts} profile={profile} />}
-      {view === 'trends' && <Trends workouts={workouts} profile={profile} />}
-      {view === 'exercise' && <Progress user={user} workouts={workouts} />}
+      <Suspense fallback={<p className="empty">Loading…</p>}>
+        {view === 'goals' && <GoalProgress user={user} workouts={workouts} profile={profile} />}
+        {view === 'trends' && <Trends workouts={workouts} profile={profile} />}
+        {view === 'exercise' && <Progress user={user} workouts={workouts} />}
+      </Suspense>
     </div>
   )
 }
