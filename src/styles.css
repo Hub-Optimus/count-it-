@@ -385,6 +385,8 @@ button { cursor: pointer; }
   font-weight: 600;
 }
 
+.required-star { color: var(--red); }
+
 .input, .textarea {
   width: 100%;
   background: var(--bg-deep);
