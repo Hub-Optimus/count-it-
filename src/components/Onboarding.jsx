@@ -60,7 +60,7 @@ const TRAIN_LOCATIONS = [
 ]
 
 const DIETARY_OPTIONS = [
-  'Vegetarian', 'Vegan', 'Dairy-free', 'Gluten-free', 'Halal', 'Kosher',
+  'Vegetarian', 'Non-vegetarian', 'Vegan', 'Dairy-free', 'Gluten-free', 'Kosher',
 ]
 
 function toggleInList(list, value) {
