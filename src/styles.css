@@ -322,6 +322,20 @@ button { cursor: pointer; }
   color: var(--bg-deep);
 }
 
+.chip-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-deep);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
 .chip-not-applied {
   opacity: 0.55;
   text-decoration: line-through;
