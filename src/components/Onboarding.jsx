@@ -88,6 +88,9 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
   const [activityLevel, setActivityLevel] = useState(initial?.activity_level ?? '')
   const [experienceLevel, setExperienceLevel] = useState(initial?.experience_level ?? '')
   const [trainLocations, setTrainLocations] = useState(initial?.train_locations ?? [])
+  // null = not answered yet - distinct from false ('No'), so validation
+  // can tell "hasn't answered" apart from "answered No".
+  const [hasTrainer, setHasTrainer] = useState(initial?.has_trainer ?? null)
 
   // Step 3 (all optional)
   const [injuryNotes, setInjuryNotes] = useState(initial?.injury_notes ?? '')
@@ -100,7 +103,7 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
   // actually changes, rather than leaving a stale warning up until the
   // next Continue click.
   useEffect(() => { setError('') }, [dateOfBirth, sex, heightCm, weight])
-  useEffect(() => { setError('') }, [primaryGoal, activityLevel, experienceLevel, trainLocations])
+  useEffect(() => { setError('') }, [primaryGoal, activityLevel, experienceLevel, trainLocations, hasTrainer])
 
   function missingStep1Fields() {
     const missing = []
@@ -117,6 +120,7 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
     if (!activityLevel) missing.push('Activity level')
     if (!experienceLevel) missing.push('Experience level')
     if (trainLocations.length === 0) missing.push('Where you train')
+    if (hasTrainer === null) missing.push('Training with a PT/coach')
     return missing
   }
 
@@ -142,7 +146,7 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
         primaryGoal,
         targetWeight: WEIGHT_RELEVANT_GOALS.includes(primaryGoal) && targetWeight ? parseFloat(targetWeight) : null,
         targetWeightUnit: WEIGHT_RELEVANT_GOALS.includes(primaryGoal) && targetWeight ? targetWeightUnit : null,
-        activityLevel, experienceLevel, trainLocations,
+        activityLevel, experienceLevel, trainLocations, hasTrainer,
         injuryNotes: injuryNotes.trim(),
         workoutDaysPerWeek: workoutDaysPerWeek ? parseInt(workoutDaysPerWeek, 10) : null,
         remindersEnabled, restDayNudgesEnabled, dietaryPrefs,
@@ -151,7 +155,7 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
         goals: PRIMARY_GOAL_TO_CHART_GOALS[primaryGoal] ?? [], goal_note: goalNote.trim() || null, height_cm: parseFloat(heightCm),
         date_of_birth: dateOfBirth, sex,
         primary_goal: primaryGoal, activity_level: activityLevel, experience_level: experienceLevel,
-        train_locations: trainLocations,
+        train_locations: trainLocations, has_trainer: hasTrainer,
         onboarding_completed_at: new Date().toISOString(),
       })
     } catch (e) {
@@ -266,6 +270,14 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
                   {o.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="label">Do you currently train with a PT or coach? <span className="required-star">*</span></label>
+            <div className="chip-row">
+              <button className={`chip ${hasTrainer === true ? 'on' : ''}`} onClick={() => setHasTrainer(true)}>Yes</button>
+              <button className={`chip ${hasTrainer === false ? 'on' : ''}`} onClick={() => setHasTrainer(false)}>No</button>
             </div>
           </div>
 
