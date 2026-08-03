@@ -131,7 +131,7 @@ export async function fetchProfile(userId) {
     .select(`
       goals, goal_note, height_cm,
       date_of_birth, sex,
-      primary_goal, target_weight, target_weight_unit, activity_level, experience_level, train_locations, has_trainer,
+      goal_priority, target_weight, target_weight_unit, activity_level, experience_level, train_locations, has_trainer,
       injury_notes, workout_days_per_week, reminders_enabled, rest_day_nudges_enabled, dietary_prefs,
       onboarding_completed_at
     `)
@@ -168,12 +168,12 @@ export async function saveHeight(userId, heightCm) {
 export async function saveOnboarding(userId, {
   dateOfBirth, sex, heightCm, weight, weightUnit,
   goals, goalNote,
-  primaryGoal, targetWeight, targetWeightUnit, activityLevel, experienceLevel, trainLocations, hasTrainer,
+  goalPriority, targetWeight, targetWeightUnit, activityLevel, experienceLevel, trainLocations, hasTrainer,
   injuryNotes, workoutDaysPerWeek, remindersEnabled, restDayNudgesEnabled, dietaryPrefs,
 }) {
   const mock = testMock()
   if (mock) {
-    window.__TEST_LAST_SAVE__ = { dateOfBirth, sex, heightCm, weight, weightUnit, primaryGoal, hasTrainer }
+    window.__TEST_LAST_SAVE__ = { dateOfBirth, sex, heightCm, weight, weightUnit, goalPriority, hasTrainer }
   } else {
     const { error } = await supabase.from('profiles').upsert({
       user_id: userId,
@@ -182,7 +182,7 @@ export async function saveOnboarding(userId, {
       height_cm: heightCm ?? null,
       goals: goals || [],
       goal_note: goalNote || null,
-      primary_goal: primaryGoal || null,
+      goal_priority: goalPriority || [],
       target_weight: targetWeight ?? null,
       target_weight_unit: targetWeightUnit || null,
       activity_level: activityLevel || null,
