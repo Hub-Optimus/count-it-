@@ -131,7 +131,7 @@ export async function fetchProfile(userId) {
     .select(`
       goals, goal_note, height_cm,
       date_of_birth, sex,
-      primary_goal, target_weight, target_weight_unit, activity_level, experience_level, train_locations,
+      primary_goal, target_weight, target_weight_unit, activity_level, experience_level, train_locations, has_trainer,
       injury_notes, workout_days_per_week, reminders_enabled, rest_day_nudges_enabled, dietary_prefs,
       onboarding_completed_at
     `)
@@ -168,12 +168,12 @@ export async function saveHeight(userId, heightCm) {
 export async function saveOnboarding(userId, {
   dateOfBirth, sex, heightCm, weight, weightUnit,
   goals, goalNote,
-  primaryGoal, targetWeight, targetWeightUnit, activityLevel, experienceLevel, trainLocations,
+  primaryGoal, targetWeight, targetWeightUnit, activityLevel, experienceLevel, trainLocations, hasTrainer,
   injuryNotes, workoutDaysPerWeek, remindersEnabled, restDayNudgesEnabled, dietaryPrefs,
 }) {
   const mock = testMock()
   if (mock) {
-    window.__TEST_LAST_SAVE__ = { dateOfBirth, sex, heightCm, weight, weightUnit, primaryGoal }
+    window.__TEST_LAST_SAVE__ = { dateOfBirth, sex, heightCm, weight, weightUnit, primaryGoal, hasTrainer }
   } else {
     const { error } = await supabase.from('profiles').upsert({
       user_id: userId,
@@ -188,6 +188,7 @@ export async function saveOnboarding(userId, {
       activity_level: activityLevel || null,
       experience_level: experienceLevel || null,
       train_locations: trainLocations || [],
+      has_trainer: hasTrainer ?? null,
       injury_notes: injuryNotes || null,
       workout_days_per_week: workoutDaysPerWeek ?? null,
       reminders_enabled: remindersEnabled ?? true,
