@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { testMock } from './testMock'
+import { todayISO } from './format'
 
 // Fetch every workout for the signed-in user, newest first,
 // with nested exercises and sets (sorted client-side by position).
@@ -124,10 +125,16 @@ export async function mergeWorkouts(userId, keepWorkout, mergeFromWorkout) {
 
 export async function fetchProfile(userId) {
   const mock = testMock()
-  if (mock) return mock.profile ?? { goals: [], goal_note: null, height_cm: null }
+  if (mock) return mock.profile ?? { goals: [], goal_note: null, height_cm: null, onboarding_completed_at: '2026-01-01T00:00:00.000Z' }
   const { data, error } = await supabase
     .from('profiles')
-    .select('goals, goal_note, height_cm')
+    .select(`
+      goals, goal_note, height_cm,
+      date_of_birth, sex,
+      primary_goal, target_weight, target_weight_unit, activity_level, experience_level, train_locations, has_trainer,
+      injury_notes, workout_days_per_week, reminders_enabled, rest_day_nudges_enabled, dietary_prefs,
+      onboarding_completed_at
+    `)
     .eq('user_id', userId)
     .maybeSingle()
   if (error) throw error
@@ -150,6 +157,56 @@ export async function saveHeight(userId, heightCm) {
   if (error) throw error
 }
 
+// ---- onboarding (F2: body basics, goal-driving fields, preferences) ----
+
+// One upsert for everything collected across the 3-step onboarding wizard,
+// plus a same-day body_metrics row for the starting weight (reuses the
+// existing weight-log table instead of a separate static field, so the
+// user's weight history starts from day one instead of day two).
+// onboarding_completed_at is what the app's onboarding gate actually
+// checks - stamping it here is what lets the user past the wall.
+export async function saveOnboarding(userId, {
+  dateOfBirth, sex, heightCm, weight, weightUnit,
+  goals, goalNote,
+  primaryGoal, targetWeight, targetWeightUnit, activityLevel, experienceLevel, trainLocations, hasTrainer,
+  injuryNotes, workoutDaysPerWeek, remindersEnabled, restDayNudgesEnabled, dietaryPrefs,
+}) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { dateOfBirth, sex, heightCm, weight, weightUnit, primaryGoal, hasTrainer }
+  } else {
+    const { error } = await supabase.from('profiles').upsert({
+      user_id: userId,
+      date_of_birth: dateOfBirth || null,
+      sex: sex || null,
+      height_cm: heightCm ?? null,
+      goals: goals || [],
+      goal_note: goalNote || null,
+      primary_goal: primaryGoal || null,
+      target_weight: targetWeight ?? null,
+      target_weight_unit: targetWeightUnit || null,
+      activity_level: activityLevel || null,
+      experience_level: experienceLevel || null,
+      train_locations: trainLocations || [],
+      has_trainer: hasTrainer ?? null,
+      injury_notes: injuryNotes || null,
+      workout_days_per_week: workoutDaysPerWeek ?? null,
+      reminders_enabled: remindersEnabled ?? true,
+      rest_day_nudges_enabled: restDayNudgesEnabled ?? false,
+      dietary_prefs: dietaryPrefs || [],
+      onboarding_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    if (error) throw error
+  }
+  // Runs in both mock and real mode - insertBodyMetric handles its own
+  // mock branch, so this stays one single code path either way instead
+  // of two that can silently drift apart.
+  if (weight) {
+    await insertBodyMetric(userId, { date: todayISO(), weight, weightUnit: weightUnit || 'kg' })
+  }
+}
+
 // ---- body weight log ----
 
 export async function fetchBodyMetrics(userId) {
@@ -164,6 +221,11 @@ export async function fetchBodyMetrics(userId) {
 }
 
 export async function insertBodyMetric(userId, { date, weight, weightUnit }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_BODY_METRIC__ = { date, weight, weightUnit }
+    return
+  }
   const { error } = await supabase
     .from('body_metrics')
     .insert({ user_id: userId, date, weight, weight_unit: weightUnit })

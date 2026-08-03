@@ -385,6 +385,8 @@ button { cursor: pointer; }
   font-weight: 600;
 }
 
+.required-star { color: var(--red); }
+
 .input, .textarea {
   width: 100%;
   background: var(--bg-deep);
@@ -1290,6 +1292,20 @@ input[type='date'].input { color-scheme: dark; }
 }
 
 .auth-tag { color: var(--ink-dim); margin: 6px 0 26px; }
+
+.progress-dots { display: flex; gap: 6px; margin: 4px 0 22px; }
+
+.progress-dot {
+  height: 4px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+}
+
+.progress-dot.on { background: var(--yellow); border-color: var(--yellow); }
+
+.step-nav { display: flex; gap: 10px; margin-top: 14px; }
 
 /* ---------- tab bar ---------- */
 

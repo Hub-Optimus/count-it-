@@ -8,17 +8,18 @@ import Auth from './components/Auth'
 import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
 import SidePanel from './components/SidePanel'
+import Onboarding from './components/Onboarding'
 
 // Lazy: these are only needed once someone actually navigates away from
-// the primary logging tab (or, for Goals, during one-time onboarding) -
-// no reason to make everyone download them on first load just to log a
-// set. WorkoutEditor/WorkoutList/SidePanel stay eager since they're
-// what nearly every visit actually needs immediately.
+// the primary logging tab - no reason to make everyone download them on
+// first load just to log a set. WorkoutEditor/WorkoutList/SidePanel/
+// Onboarding stay eager since they're what a visit needs immediately
+// (Onboarding only for brand-new or not-yet-onboarded users, but it's
+// small and sits on the critical path right after signup).
 const Progress = lazy(() => import('./components/Progress'))
 const Trends = lazy(() => import('./components/Trends'))
 const GoalProgress = lazy(() => import('./components/GoalProgress'))
 const Settings = lazy(() => import('./components/Settings'))
-const Goals = lazy(() => import('./components/Goals'))
 
 const UNIT_KEY = 'countit-unit'
 
@@ -248,12 +249,12 @@ export function Main({ user }) {
     )
   }
 
-  if (profile === null) {
-    return (
-      <Suspense fallback={<p className="empty">Loading…</p>}>
-        <Goals user={user} initial={null} mode="onboard" onDone={setProfile} />
-      </Suspense>
-    )
+  // profile === null: brand-new user, no row yet. profile with no
+  // onboarding_completed_at: an existing user (from before this wizard
+  // existed) who has a row but hasn't answered the new questions - both
+  // get the same wall, so nobody skips it just because a row exists.
+  if (!profile || !profile.onboarding_completed_at) {
+    return <Onboarding user={user} initial={profile} defaultUnit={defaultUnit} onDone={setProfile} />
   }
 
   if (editor) {
