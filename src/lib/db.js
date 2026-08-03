@@ -199,12 +199,46 @@ export async function saveOnboarding(userId, {
     })
     if (error) throw error
   }
-  // Runs in both mock and real mode - insertBodyMetric handles its own
-  // mock branch, so this stays one single code path either way instead
-  // of two that can silently drift apart.
+  // Runs in both mock and real mode - insertBodyMetric and
+  // initRoadmapProgress each handle their own mock branch, so this
+  // stays one single code path either way instead of two that can
+  // silently drift apart.
   if (weight) {
     await insertBodyMetric(userId, { date: todayISO(), weight, weightUnit: weightUnit || 'kg' })
   }
+  // Only beginners get a roadmap right now - Intermediate/Advanced
+  // roadmaps are a later phase. Re-running onboarding (e.g. editing
+  // answers) won't create a second row - initRoadmapProgress no-ops if
+  // one already exists.
+  if (experienceLevel === 'beginner') {
+    await initRoadmapProgress(userId)
+  }
+}
+
+// ---- beginner roadmap ----
+
+export async function initRoadmapProgress(userId) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_ROADMAP_INIT__ = { userId }
+    return
+  }
+  const { error } = await supabase
+    .from('roadmap_progress')
+    .upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true })
+  if (error) throw error
+}
+
+export async function fetchRoadmapProgress(userId) {
+  const mock = testMock()
+  if (mock) return mock.roadmapProgress ?? null
+  const { data, error } = await supabase
+    .from('roadmap_progress')
+    .select('stage, started_at, graduated_at')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return data
 }
 
 // ---- body weight log ----
