@@ -143,6 +143,76 @@ test('goals are rank-ordered by tap order, and removing one renumbers the rest',
   expect(saved.goalPriority).toEqual(['endurance', 'strength'])
 })
 
+test('choosing Beginner experience level initializes roadmap progress', async ({ page }) => {
+  const errors = []
+  page.on('pageerror', (e) => errors.push(String(e)))
+
+  await page.addInitScript(() => {
+    window.__TEST_MOCK__ = {
+      workouts: [],
+      profile: { goals: [], goal_note: null, height_cm: null, onboarding_completed_at: null },
+      templates: [], bodyMetrics: [], exerciseTargets: {},
+    }
+  })
+  await page.goto('/test-harness.html')
+  await page.waitForSelector('text=A few basics', { timeout: 10000 })
+
+  await page.locator('input[type="date"]').fill('1995-06-15')
+  await page.getByRole('button', { name: 'Male', exact: true }).click()
+  await page.locator('input[placeholder="e.g. 175"]').fill('178')
+  await page.locator('input[placeholder="weight"]').fill('75')
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  await page.getByRole('button', { name: 'Build muscle' }).click()
+  await page.getByRole('button', { name: 'Moderate · 3-4 days/week' }).click()
+  await page.getByRole('button', { name: 'Beginner · < 6 months' }).click()
+  await page.getByRole('button', { name: 'Gym' }).click()
+  await page.getByRole('button', { name: 'No', exact: true }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  await page.getByRole('button', { name: 'Finish' }).click()
+  await page.waitForSelector('text=Workouts', { timeout: 10000 })
+  expect(errors).toEqual([])
+
+  const roadmapInit = await page.evaluate(() => window.__TEST_LAST_ROADMAP_INIT__)
+  expect(roadmapInit).toBeTruthy()
+})
+
+test('choosing a non-Beginner experience level does not initialize a roadmap', async ({ page }) => {
+  const errors = []
+  page.on('pageerror', (e) => errors.push(String(e)))
+
+  await page.addInitScript(() => {
+    window.__TEST_MOCK__ = {
+      workouts: [],
+      profile: { goals: [], goal_note: null, height_cm: null, onboarding_completed_at: null },
+      templates: [], bodyMetrics: [], exerciseTargets: {},
+    }
+  })
+  await page.goto('/test-harness.html')
+  await page.waitForSelector('text=A few basics', { timeout: 10000 })
+
+  await page.locator('input[type="date"]').fill('1995-06-15')
+  await page.getByRole('button', { name: 'Male', exact: true }).click()
+  await page.locator('input[placeholder="e.g. 175"]').fill('178')
+  await page.locator('input[placeholder="weight"]').fill('75')
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  await page.getByRole('button', { name: 'Build muscle' }).click()
+  await page.getByRole('button', { name: 'Moderate · 3-4 days/week' }).click()
+  await page.getByRole('button', { name: 'Advanced · 2+ years' }).click()
+  await page.getByRole('button', { name: 'Gym' }).click()
+  await page.getByRole('button', { name: 'No', exact: true }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  await page.getByRole('button', { name: 'Finish' }).click()
+  await page.waitForSelector('text=Workouts', { timeout: 10000 })
+  expect(errors).toEqual([])
+
+  const roadmapInit = await page.evaluate(() => window.__TEST_LAST_ROADMAP_INIT__)
+  expect(roadmapInit).toBeFalsy()
+})
+
 test('the duplicate goal question is gone - Primary goal is the only goal question shown', async ({ page }) => {
   await page.addInitScript(() => {
     window.__TEST_MOCK__ = {
