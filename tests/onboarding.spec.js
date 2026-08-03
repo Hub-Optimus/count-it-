@@ -66,6 +66,7 @@ test('completing all three steps saves and lands on the main app', async ({ page
   await page.getByRole('button', { name: 'Moderate · 3-4 days/week' }).click()
   await page.getByRole('button', { name: 'Intermediate · 6 months - 2 years' }).click()
   await page.getByRole('button', { name: 'Gym' }).click()
+  await page.getByRole('button', { name: 'No', exact: true }).click()
   await continueBtn2.click()
 
   // Step 3 - everything optional, Finish should work with nothing filled
@@ -81,6 +82,7 @@ test('completing all three steps saves and lands on the main app', async ({ page
   expect(saved.heightCm).toBe(178)
   expect(saved.weight).toBe(75)
   expect(saved.primaryGoal).toBe('build_muscle')
+  expect(saved.hasTrainer).toBe(false)
 
   const bodyMetric = await page.evaluate(() => window.__TEST_LAST_BODY_METRIC__)
   expect(bodyMetric.weight).toBe(75)
