@@ -33,8 +33,14 @@ export const BEGINNER_STAGES = [
 const STAGE_1_EXIT_DAYS = 3   // enough to have tried the basics at least a few times
 const STAGE_2_EXIT_DAYS = 12  // roughly a month at 3x/week - the real grind
 
-function distinctLoggedDays(workouts) {
+export const STAGE_EXIT_DAYS = { 1: STAGE_1_EXIT_DAYS, 2: STAGE_2_EXIT_DAYS }
+
+export function distinctLoggedDays(workouts) {
   return new Set(workouts.map((w) => w.date)).size
+}
+
+export function weeksSince(dateIso) {
+  return (Date.now() - new Date(dateIso).getTime()) / (7 * 24 * 60 * 60 * 1000)
 }
 
 // Returns the stage the user should be on given their logged history.
@@ -54,7 +60,7 @@ export function nextStage(currentStage, workouts) {
 // already used for "Best set ever" (setComparison.js) rather than
 // inventing a second progress metric.
 
-const GRADUATION_MIN_WEEKS = 8 // duration floor - agreed 2026-08-04
+export const GRADUATION_MIN_WEEKS = 8 // duration floor - agreed 2026-08-04
 const PLATEAU_WINDOW_SESSIONS = 4
 const MIN_SESSIONS_TO_JUDGE = 4
 

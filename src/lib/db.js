@@ -241,6 +241,35 @@ export async function fetchRoadmapProgress(userId) {
   return data
 }
 
+// Called from the roadmap screen whenever computed progress says the
+// user has actually earned the next stage. Only ever moves forward -
+// the screen itself decides when to call this, this just persists it.
+export async function advanceRoadmapStage(userId, stage) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_ROADMAP_STAGE__ = stage
+    return
+  }
+  const { error } = await supabase
+    .from('roadmap_progress')
+    .update({ stage, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+  if (error) throw error
+}
+
+export async function markRoadmapGraduated(userId) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_ROADMAP_GRADUATED__ = true
+    return
+  }
+  const { error } = await supabase
+    .from('roadmap_progress')
+    .update({ graduated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+  if (error) throw error
+}
+
 // ---- body weight log ----
 
 export async function fetchBodyMetrics(userId) {
