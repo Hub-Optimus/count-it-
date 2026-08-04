@@ -1,17 +1,155 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   BEGINNER_STAGES, STAGE_EXIT_DAYS, GRADUATION_MIN_WEEKS,
   nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate, stage1Prescription,
 } from '../lib/roadmap'
-import { advanceRoadmapStage, markRoadmapGraduated } from '../lib/db'
+import { advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout } from '../lib/db'
+import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
+import { PICTOGRAMS } from '../lib/pictograms'
+import { todayISO } from '../lib/format'
 import { Tally } from './TabBar'
 
+// Reuses the app's real pictogram set (same one ExercisePicker uses) so
+// Stage 1 gets themed icons for free instead of a plain text list.
+function ExerciseIcon({ name }) {
+  const cat = pictogramFor(name)
+  const Pic = cat && PICTOGRAMS[cat]
+  if (!Pic) return null
+  const group = groupFor(name) || 'Other'
+  const color = GROUP_COLOR[group] || GROUP_COLOR.Other
+  return (
+    <span className="picker-row-picto" style={{ background: color + '26', color }}>
+      <Pic width="26" height="26" />
+    </span>
+  )
+}
+
+// Inline quick-log: weight required (can't fake it - it'd corrupt real
+// workout history and every chart built on it), reps pre-filled with a
+// sensible default but editable, one tap to check off. No navigation,
+// no superset/warmup/RPE/timer chrome from the full editor - that's
+// still there via the full logger if someone wants it, this just isn't
+// the default path for Stage 1 anymore.
+function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
+  const [drafts, setDrafts] = useState({}) // name -> { weight, reps }
+  const [logged, setLogged] = useState({}) // name -> { weight, reps }
+  const [saving, setSaving] = useState(false)
+  const [celebrate, setCelebrate] = useState(false)
+
+  const loggedCount = Object.keys(logged).length
+  const unit = defaultUnit || 'kg'
+
+  function checkOff(ex) {
+    const draft = drafts[ex.name] || {}
+    const weight = parseFloat(draft.weight)
+    const reps = parseInt(draft.reps ?? ex.defaultReps, 10)
+    if (!weight || weight <= 0 || !reps || reps <= 0) return
+    setLogged((l) => ({ ...l, [ex.name]: { weight, reps } }))
+  }
+
+  function undo(name) {
+    setLogged((l) => {
+      const next = { ...l }
+      delete next[name]
+      return next
+    })
+  }
+
+  async function finishSession() {
+    const names = Object.keys(logged)
+    if (!names.length) return
+    setSaving(true)
+    try {
+      const exercisesPayload = names.map((name) => ({
+        name,
+        notes: null,
+        sets: [{ weight: logged[name].weight, unit, reps: logged[name].reps, warmup: false }],
+      }))
+      await insertFullWorkout(user.id, { date: todayISO(), split: null, notes: null, exercises: exercisesPayload })
+      const allDone = names.length === exercises.length
+      setLogged({})
+      setDrafts({})
+      if (allDone) {
+        setCelebrate(true)
+        setTimeout(() => setCelebrate(false), 2200)
+      }
+      onLogged?.()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="hr" />
+      {loggedCount > 0 && (
+        <span className="roadmap-session-counter">{loggedCount} of {exercises.length} logged</span>
+      )}
+      <p className="small" style={{ margin: '0 0 4px' }}>
+        Today's session — same movements every time this stage, type your weight and check it off:
+      </p>
+      {exercises.map((ex) => {
+        const done = logged[ex.name]
+        const draft = drafts[ex.name] || {}
+        return (
+          <div className="quick-log-row" key={ex.name}>
+            <ExerciseIcon name={ex.name} />
+            <div className="quick-log-info">
+              <div className="quick-log-name">{ex.name}</div>
+              {done
+                ? <div className="quick-log-done-text">{done.weight}{unit} × {done.reps}</div>
+                : <div className="quick-log-target">{ex.target}</div>}
+            </div>
+            {!done && (
+              <>
+                <input
+                  className="quick-log-input"
+                  placeholder={unit}
+                  inputMode="decimal"
+                  value={draft.weight ?? ''}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [ex.name]: { ...d[ex.name], weight: e.target.value } }))}
+                  aria-label={`${ex.name} weight`}
+                />
+                <input
+                  className="quick-log-input"
+                  placeholder="reps"
+                  inputMode="numeric"
+                  value={draft.reps ?? String(ex.defaultReps)}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [ex.name]: { ...d[ex.name], reps: e.target.value } }))}
+                  aria-label={`${ex.name} reps`}
+                />
+              </>
+            )}
+            <button
+              type="button"
+              className={`quick-log-check ${done ? 'done' : ''}`}
+              onClick={() => (done ? undo(ex.name) : checkOff(ex))}
+              aria-label={done ? `Undo ${ex.name}` : `Mark ${ex.name} done`}
+            >
+              ✓
+            </button>
+          </div>
+        )
+      })}
+      {celebrate && <p className="roadmap-celebration">🔥 Session logged — nice work!</p>}
+      <button
+        className="btn btn-primary btn-block"
+        style={{ marginTop: 10 }}
+        disabled={loggedCount === 0 || saving}
+        onClick={finishSession}
+      >
+        {saving ? 'Saving…' : `Finish session${loggedCount ? ` (${loggedCount})` : ''}`}
+      </button>
+    </>
+  )
+}
+
 // The gamified overview - "where am I, what's next" - plus, for Stage 1
-// specifically, an actual "start today's session" action, since that's
-// the only stage with real content built yet. Stages 2/3 don't have
-// their own template content yet, so they stay overview-only for now -
-// not an oversight, just not built.
-export default function Roadmap({ user, workouts, profile, roadmapProgress, onProgressChange, onStartTemplate }) {
+// specifically, an actual inline quick-log, since that's the only stage
+// with real content built yet. Stages 2/3 don't have their own template
+// content yet, so they stay overview-only for now - not an oversight,
+// just not built.
+export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapProgress, onProgressChange, onLogged }) {
   const days = useMemo(() => distinctLoggedDays(workouts), [workouts])
   const stage1Exercises = useMemo(() => stage1Prescription(profile?.goal_priority ?? []), [profile])
   const computedStage = useMemo(
@@ -88,23 +226,7 @@ export default function Roadmap({ user, workouts, profile, roadmapProgress, onPr
         )}
 
         {stage === 1 && (
-          <>
-            <div className="hr" />
-            <p className="small" style={{ margin: '0 0 8px' }}>Today's session — same movements every time this stage, weight goes in when you log it:</p>
-            {stage1Exercises.map((ex) => (
-              <div className="session-row" key={ex.name}>
-                <span className="session-date" style={{ flex: 1, minWidth: 0 }}>{ex.name}</span>
-                <span className="small">{ex.target}</span>
-              </div>
-            ))}
-            <button
-              className="btn btn-primary btn-block"
-              style={{ marginTop: 10 }}
-              onClick={() => onStartTemplate(stage1Exercises.map((ex) => ex.name))}
-            >
-              Start today's session
-            </button>
-          </>
+          <QuickLogSession user={user} exercises={stage1Exercises} defaultUnit={defaultUnit} onLogged={onLogged} />
         )}
 
         {stage === 3 && (
