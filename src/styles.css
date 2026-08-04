@@ -296,6 +296,64 @@ button { cursor: pointer; }
   justify-content: center;
 }
 
+.roadmap-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--card-2);
+  overflow: hidden;
+  margin: 10px 0 6px;
+}
+
+.roadmap-bar-fill {
+  height: 100%;
+  background: var(--yellow);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.roadmap-stage {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.roadmap-stage:last-child { border-bottom: none; }
+
+.roadmap-stage-marker {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 2px solid var(--line);
+  color: var(--ink-faint);
+}
+
+.roadmap-stage.done .roadmap-stage-marker {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--bg-deep);
+}
+
+.roadmap-stage.current .roadmap-stage-marker {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: var(--bg-deep);
+}
+
+.roadmap-stage-label {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.roadmap-stage.locked .roadmap-stage-label { color: var(--ink-faint); }
+
 /* ---------- chips ---------- */
 
 .chip-row {

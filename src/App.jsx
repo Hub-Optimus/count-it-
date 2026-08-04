@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, Suspense, lazy } from 'react'
 import { supabase, configured } from './lib/supabase'
-import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates, fetchBodyMetrics } from './lib/db'
+import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates, fetchBodyMetrics, fetchRoadmapProgress } from './lib/db'
 import { todayISO } from './lib/format'
 import { peekDraft } from './lib/draft'
 import TabBar, { Tally } from './components/TabBar'
@@ -20,6 +20,7 @@ const Progress = lazy(() => import('./components/Progress'))
 const Trends = lazy(() => import('./components/Trends'))
 const GoalProgress = lazy(() => import('./components/GoalProgress'))
 const Settings = lazy(() => import('./components/Settings'))
+const Roadmap = lazy(() => import('./components/Roadmap'))
 
 const UNIT_KEY = 'countit-unit'
 
@@ -76,6 +77,8 @@ export function Main({ user }) {
   const [editor, setEditor] = useState(null) // null | { workout: null } | { workout }
   const [defaultUnit, setDefaultUnit] = useState(() => localStorage.getItem(UNIT_KEY) || 'kg')
   const [profile, setProfile] = useState(undefined) // undefined = loading, null = needs onboarding
+  // undefined = loading/not applicable yet, null = no roadmap (not a beginner)
+  const [roadmapProgress, setRoadmapProgress] = useState(undefined)
 
   // Lets him and any other user know, right in the app, when they're
   // running an older build than what's actually live - no more silent
@@ -139,6 +142,14 @@ export function Main({ user }) {
   useEffect(() => {
     withJwtRetry(() => fetchProfile(user.id)).then(setProfile).catch(() => setProfile(null))
   }, [user.id])
+
+  // Only beginners have a roadmap right now - Intermediate/Advanced
+  // roadmaps are a later phase. Re-fetches whenever experience_level
+  // changes (e.g. someone edits it in Settings later).
+  useEffect(() => {
+    if (!profile || profile.experience_level !== 'beginner') { setRoadmapProgress(null); return }
+    withJwtRetry(() => fetchRoadmapProgress(user.id)).then(setRoadmapProgress).catch(() => setRoadmapProgress(null))
+  }, [profile, user.id])
 
   const [templates, setTemplates] = useState([])
   const reloadTemplates = useCallback(() => {
@@ -254,7 +265,17 @@ export function Main({ user }) {
   // existed) who has a row but hasn't answered the new questions - both
   // get the same wall, so nobody skips it just because a row exists.
   if (!profile || !profile.onboarding_completed_at) {
-    return <Onboarding user={user} initial={profile} defaultUnit={defaultUnit} onDone={setProfile} />
+    return (
+      <Onboarding
+        user={user}
+        initial={profile}
+        defaultUnit={defaultUnit}
+        onDone={(p) => {
+          setProfile(p)
+          if (p.experience_level === 'beginner') setTab('roadmap')
+        }}
+      />
+    )
   }
 
   if (editor) {
@@ -274,7 +295,7 @@ export function Main({ user }) {
     )
   }
 
-  const pageTitle = { log: 'Workouts', progress: 'Progress', settings: 'Settings' }[tab]
+  const pageTitle = { log: 'Workouts', roadmap: 'Roadmap', progress: 'Progress', settings: 'Settings' }[tab]
 
   return (
     <div className="app-shell">
@@ -318,7 +339,7 @@ export function Main({ user }) {
           </div>
         </div>
       )}
-      <TabBar tab={tab} onChange={setTab} user={user} sessionCount={workouts?.length} />
+      <TabBar tab={tab} onChange={setTab} user={user} sessionCount={workouts?.length} showRoadmap={Boolean(roadmapProgress)} />
       <div className="app">
       <header className="app-header">
         <span className="brand">
@@ -366,6 +387,17 @@ export function Main({ user }) {
             <button className="fab" onClick={startNewWorkout} aria-label="New workout">+</button>
           </>
         )
+      )}
+
+      {tab === 'roadmap' && (
+        <Suspense fallback={<p className="empty">Loading…</p>}>
+          <Roadmap
+            user={user}
+            workouts={workouts ?? []}
+            roadmapProgress={roadmapProgress}
+            onProgressChange={setRoadmapProgress}
+          />
+        </Suspense>
       )}
 
       {tab === 'progress' && (
