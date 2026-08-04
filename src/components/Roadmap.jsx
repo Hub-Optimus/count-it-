@@ -1,16 +1,19 @@
 import { useEffect, useMemo } from 'react'
 import {
   BEGINNER_STAGES, STAGE_EXIT_DAYS, GRADUATION_MIN_WEEKS,
-  nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate,
+  nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate, stage1Prescription,
 } from '../lib/roadmap'
 import { advanceRoadmapStage, markRoadmapGraduated } from '../lib/db'
 import { Tally } from './TabBar'
 
-// The gamified overview - "where am I, what's next." Deliberately does
-// NOT try to tell the user what to do today (that's a Log-tab banner,
-// a later phase) - this screen is the map, not the compass.
-export default function Roadmap({ user, workouts, roadmapProgress, onProgressChange }) {
+// The gamified overview - "where am I, what's next" - plus, for Stage 1
+// specifically, an actual "start today's session" action, since that's
+// the only stage with real content built yet. Stages 2/3 don't have
+// their own template content yet, so they stay overview-only for now -
+// not an oversight, just not built.
+export default function Roadmap({ user, workouts, profile, roadmapProgress, onProgressChange, onStartTemplate }) {
   const days = useMemo(() => distinctLoggedDays(workouts), [workouts])
+  const stage1Exercises = useMemo(() => stage1Prescription(profile?.goal_priority ?? []), [profile])
   const computedStage = useMemo(
     () => (roadmapProgress ? nextStage(roadmapProgress.stage, workouts) : null),
     [roadmapProgress, workouts],
@@ -81,6 +84,26 @@ export default function Roadmap({ user, workouts, roadmapProgress, onProgressCha
               />
             </div>
             <p className="small" style={{ margin: 0 }}>{days} of {STAGE_EXIT_DAYS[stage]} days logged</p>
+          </>
+        )}
+
+        {stage === 1 && (
+          <>
+            <div className="hr" />
+            <p className="small" style={{ margin: '0 0 8px' }}>Today's session — same movements every time this stage, weight goes in when you log it:</p>
+            {stage1Exercises.map((ex) => (
+              <div className="session-row" key={ex.name}>
+                <span className="session-date" style={{ flex: 1, minWidth: 0 }}>{ex.name}</span>
+                <span className="small">{ex.target}</span>
+              </div>
+            ))}
+            <button
+              className="btn btn-primary btn-block"
+              style={{ marginTop: 10 }}
+              onClick={() => onStartTemplate(stage1Exercises.map((ex) => ex.name))}
+            >
+              Start today's session
+            </button>
           </>
         )}
 
