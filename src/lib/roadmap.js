@@ -42,29 +42,31 @@ export const STAGE_1_EXERCISES = [
 ]
 
 const GOAL_REP_TARGETS = {
-  strength: '5 reps × 5 sets',
-  build_muscle: '8-12 reps × 3-4 sets',
-  general_fitness: '8-12 reps × 3-4 sets',
-  maintain: '8-12 reps × 3-4 sets', // no clear direction for this goal - same moderate default as general fitness
-  lose_fat: '12-15 reps × 3 sets',
-  endurance: '15-20 reps × 2-3 sets',
+  strength: { display: '5 reps × 5 sets', defaultReps: 5 },
+  build_muscle: { display: '8-12 reps × 3-4 sets', defaultReps: 10 },
+  general_fitness: { display: '8-12 reps × 3-4 sets', defaultReps: 10 },
+  maintain: { display: '8-12 reps × 3-4 sets', defaultReps: 10 }, // no clear direction for this goal - same moderate default as general fitness
+  lose_fat: { display: '12-15 reps × 3 sets', defaultReps: 13 },
+  endurance: { display: '15-20 reps × 2-3 sets', defaultReps: 17 },
 }
 
 // Dead Bug is a stability drill, not a load-and-recover compound lift -
 // core endurance doesn't map onto strength/hypertrophy rep ranges the
 // same way, so it stays the same for every goal rather than forcing a
-// distinction onto it that wouldn't mean anything.
-const CORE_TARGET = '8-10 reps per side × 3 sets'
+// distinction onto it that wouldn't mean anything. Logged as one plain
+// rep count (not per-side) to keep the quick-log flow simple - the full
+// editor's per-side tracking is still there if someone wants it.
+const CORE_TARGET = { display: '8-10 reps per side × 3 sets', defaultReps: 9 }
 
 // goalPriority[0] (top-ranked goal) drives the prescription - the rest
 // of the ranked list doesn't affect Stage 1's numbers, only which chart
 // goals light up (see Onboarding.jsx's chartGoalsFor).
 export function stage1Prescription(goalPriority) {
   const target = GOAL_REP_TARGETS[goalPriority?.[0]] ?? GOAL_REP_TARGETS.general_fitness
-  return STAGE_1_EXERCISES.map((ex) => ({
-    ...ex,
-    target: ex.pattern === 'Core' ? CORE_TARGET : target,
-  }))
+  return STAGE_1_EXERCISES.map((ex) => {
+    const t = ex.pattern === 'Core' ? CORE_TARGET : target
+    return { ...ex, target: t.display, defaultReps: t.defaultReps }
+  })
 }
 
 // ---- Stage 1 -> 2 and Stage 2 -> 3: session-count thresholds ----
