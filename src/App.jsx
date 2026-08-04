@@ -394,8 +394,10 @@ export function Main({ user }) {
           <Roadmap
             user={user}
             workouts={workouts ?? []}
+            profile={profile}
             roadmapProgress={roadmapProgress}
             onProgressChange={setRoadmapProgress}
+            onStartTemplate={(names) => setEditor({ workout: null, initialExercises: names })}
           />
         </Suspense>
       )}
