@@ -7,6 +7,7 @@ import { advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout } from '..
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { todayISO } from '../lib/format'
+import { playCheckSound, playCelebrationSound } from '../lib/sound'
 import { Tally } from './TabBar'
 
 // Reuses the app's real pictogram set (same one ExercisePicker uses) so
@@ -24,6 +25,59 @@ function ExerciseIcon({ name }) {
   )
 }
 
+// Hand-drawn in the exact same halo-stroke technique as the app's real
+// pictogram icons (thick currentColor outline, thinner red pass on top,
+// filled torso, ground shadow) so it looks like it belongs here instead
+// of a bolted-on mascot in a different visual language.
+function Mascot({ celebrating }) {
+  const arms = celebrating
+    ? { left: 'M16 16 L9 7', right: 'M24 16 L31 7' }
+    : { left: 'M16 16 L12 24', right: 'M24 16 L28 24' }
+  return (
+    <svg viewBox="0 0 40 40" width="64" height="64" className={`roadmap-mascot ${celebrating ? 'celebrating' : 'idle'}`}>
+      <ellipse cx="20" cy="37.5" rx="7" ry="1.5" fill="currentColor" opacity="0.14" />
+      <g fill="none" stroke="currentColor" strokeWidth="7.2" strokeLinecap="round">
+        <line x1="18" y1="25" x2="15" y2="35" />
+        <line x1="22" y1="25" x2="25" y2="35" />
+        <path d={arms.left} />
+        <path d={arms.right} />
+      </g>
+      <g fill="none" stroke="#EF4444" strokeWidth="5.2" strokeLinecap="round">
+        <line x1="18" y1="25" x2="15" y2="35" />
+        <line x1="22" y1="25" x2="25" y2="35" />
+        <path d={arms.left} />
+        <path d={arms.right} />
+      </g>
+      <path d="M16 14 Q20 12.5 24 14 L24 25 Q20 27 16 25 Z" fill="currentColor" opacity="0.92" />
+      <circle cx="20" cy="10" r="4" fill="currentColor" />
+    </svg>
+  )
+}
+
+// Small CSS particle burst - no canvas, no new dependency, just enough
+// motion to sell "celebration" without pretending to be a game engine.
+function Confetti() {
+  const pieces = useMemo(() => Array.from({ length: 14 }, (_, i) => ({
+    id: i,
+    color: ['#F5B93B', '#EF4444', '#22C55E', '#3B82F6'][i % 4],
+    dx: (Math.random() - 0.5) * 160,
+    dy: 50 + Math.random() * 70,
+    rot: (Math.random() - 0.5) * 360,
+    delay: Math.random() * 0.15,
+  })), [])
+  return (
+    <div className="roadmap-confetti" aria-hidden="true">
+      {pieces.map((p) => (
+        <span
+          key={p.id}
+          className="roadmap-confetti-piece"
+          style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, background: p.color, animationDelay: `${p.delay}s` }}
+        />
+      ))}
+    </div>
+  )
+}
+
 // Inline quick-log: weight required (can't fake it - it'd corrupt real
 // workout history and every chart built on it), reps pre-filled with a
 // sensible default but editable, one tap to check off. No navigation,
@@ -35,6 +89,7 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
   const [logged, setLogged] = useState({}) // name -> { weight, reps }
   const [saving, setSaving] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
+  const [counterPop, setCounterPop] = useState(false)
 
   const loggedCount = Object.keys(logged).length
   const unit = defaultUnit || 'kg'
@@ -45,6 +100,9 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
     const reps = parseInt(draft.reps ?? ex.defaultReps, 10)
     if (!weight || weight <= 0 || !reps || reps <= 0) return
     setLogged((l) => ({ ...l, [ex.name]: { weight, reps } }))
+    playCheckSound()
+    setCounterPop(true)
+    setTimeout(() => setCounterPop(false), 320)
   }
 
   function undo(name) {
@@ -70,6 +128,7 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
       setLogged({})
       setDrafts({})
       if (allDone) {
+        playCelebrationSound()
         setCelebrate(true)
         setTimeout(() => setCelebrate(false), 2200)
       }
@@ -83,7 +142,7 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
     <>
       <div className="hr" />
       {loggedCount > 0 && (
-        <span className="roadmap-session-counter">{loggedCount} of {exercises.length} logged</span>
+        <span className={`roadmap-session-counter ${counterPop ? 'pop' : ''}`}>{loggedCount} of {exercises.length} logged</span>
       )}
       <p className="small" style={{ margin: '0 0 4px' }}>
         Today's session — same movements every time this stage, type your weight and check it off:
@@ -131,7 +190,13 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
           </div>
         )
       })}
-      {celebrate && <p className="roadmap-celebration">🔥 Session logged — nice work!</p>}
+      {celebrate && (
+        <div className="roadmap-celebrate-block">
+          <Confetti />
+          <div className="roadmap-mascot-wrap"><Mascot celebrating /></div>
+          <p className="roadmap-celebration">🔥 Session logged — nice work!</p>
+        </div>
+      )}
       <button
         className="btn btn-primary btn-block"
         style={{ marginTop: 10 }}
@@ -193,7 +258,8 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
   if (roadmapProgress.graduated_at) {
     return (
       <div className="card">
-        <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>🎉 You've graduated Beginner</p>
+        <div className="roadmap-mascot-wrap"><Mascot celebrating /></div>
+        <p style={{ fontWeight: 700, fontSize: 16, margin: 0, textAlign: 'center' }}>🎉 You've graduated Beginner</p>
         <p className="small" style={{ marginTop: 6 }}>
           Your regularly-trained lifts stopped moving session to session even after enough time to
           settle — that's the real signal you're ready for Intermediate. The Intermediate roadmap
@@ -209,6 +275,7 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
   return (
     <div>
       <div className="card">
+        <div className="roadmap-mascot-wrap"><Mascot /></div>
         <p className="small" style={{ margin: 0 }}>Stage {stage} of 3</p>
         <p style={{ fontWeight: 700, fontSize: 18, margin: '4px 0 0' }}>{current.label}</p>
         <p className="small" style={{ margin: '6px 0 0' }}>{current.blurb}</p>
@@ -245,7 +312,8 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
         )}
       </div>
 
-      <div className="card">
+      <div className="card roadmap-path">
+        <div className="roadmap-path-line" aria-hidden="true" />
         {BEGINNER_STAGES.map((s) => {
           const status = s.id < stage ? 'done' : s.id === stage ? 'current' : 'locked'
           return (
