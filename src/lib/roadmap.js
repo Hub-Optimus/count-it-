@@ -25,6 +25,48 @@ export const BEGINNER_STAGES = [
   },
 ]
 
+// ---- Stage 1 starter session ----
+//
+// 5 movement patterns, universal for every beginner regardless of goal -
+// form literacy doesn't change by goal, only the rep/set prescription
+// does. Names are exact matches in exerciseLibrary.js, checked against
+// the real file rather than guessed, so the search/log flow won't miss
+// on a name that doesn't exist.
+
+export const STAGE_1_EXERCISES = [
+  { pattern: 'Squat', name: 'Dumbbell Squat' },
+  { pattern: 'Hinge', name: 'Dumbbell Romanian Deadlift' },
+  { pattern: 'Push', name: 'Push-up' },
+  { pattern: 'Pull', name: 'Dumbbell Bent Over Row' },
+  { pattern: 'Core', name: 'Dead Bug' },
+]
+
+const GOAL_REP_TARGETS = {
+  strength: '5 reps × 5 sets',
+  build_muscle: '8-12 reps × 3-4 sets',
+  general_fitness: '8-12 reps × 3-4 sets',
+  maintain: '8-12 reps × 3-4 sets', // no clear direction for this goal - same moderate default as general fitness
+  lose_fat: '12-15 reps × 3 sets',
+  endurance: '15-20 reps × 2-3 sets',
+}
+
+// Dead Bug is a stability drill, not a load-and-recover compound lift -
+// core endurance doesn't map onto strength/hypertrophy rep ranges the
+// same way, so it stays the same for every goal rather than forcing a
+// distinction onto it that wouldn't mean anything.
+const CORE_TARGET = '8-10 reps per side × 3 sets'
+
+// goalPriority[0] (top-ranked goal) drives the prescription - the rest
+// of the ranked list doesn't affect Stage 1's numbers, only which chart
+// goals light up (see Onboarding.jsx's chartGoalsFor).
+export function stage1Prescription(goalPriority) {
+  const target = GOAL_REP_TARGETS[goalPriority?.[0]] ?? GOAL_REP_TARGETS.general_fitness
+  return STAGE_1_EXERCISES.map((ex) => ({
+    ...ex,
+    target: ex.pattern === 'Core' ? CORE_TARGET : target,
+  }))
+}
+
 // ---- Stage 1 -> 2 and Stage 2 -> 3: session-count thresholds ----
 //
 // Distinct logged days, not total sets - "did you show up" is the
