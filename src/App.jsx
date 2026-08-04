@@ -395,9 +395,10 @@ export function Main({ user }) {
             user={user}
             workouts={workouts ?? []}
             profile={profile}
+            defaultUnit={defaultUnit}
             roadmapProgress={roadmapProgress}
             onProgressChange={setRoadmapProgress}
-            onStartTemplate={(names) => setEditor({ workout: null, initialExercises: names })}
+            onLogged={load}
           />
         </Suspense>
       )}
