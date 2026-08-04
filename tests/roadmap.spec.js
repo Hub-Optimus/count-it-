@@ -30,7 +30,7 @@ test('a beginner with a roadmap sees the Roadmap tab, showing their current stag
   expect(errors).toEqual([])
 })
 
-test('Start today\'s session opens the workout editor pre-filled with the Stage 1 exercises', async ({ page }) => {
+test('quick-log: checking off an exercise and finishing saves a real workout', async ({ page }) => {
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
 
@@ -49,23 +49,49 @@ test('Start today\'s session opens the workout editor pre-filled with the Stage 
   await page.waitForSelector('text=Workouts', { timeout: 10000 })
   await page.getByRole('button', { name: 'Roadmap' }).click()
 
-  await expect(page.locator('text=12-15 reps × 3 sets').first()).toBeVisible() // lose_fat target, proves the goal actually drove it
-  await page.getByRole('button', { name: "Start today's session" }).click()
+  // Nothing logged yet - Finish stays disabled, no forcing a full session
+  await expect(page.getByRole('button', { name: 'Finish session' })).toBeDisabled()
 
-  // Checking .toHaveValue() on the actual search inputs, not page text -
-  // exercise names only ever land as input values here, and relying on
-  // them incidentally appearing as literal text elsewhere (e.g. a later
-  // exercise's "Link as superset with X" button) is exactly the kind of
-  // assertion that looks right for 4 exercises and silently breaks on
-  // the 5th, which is what happened on the first pass of this test.
-  const nameInputs = page.getByPlaceholder('Search or type exercise')
-  await expect(nameInputs).toHaveCount(5, { timeout: 10000 })
-  await expect(nameInputs.nth(0)).toHaveValue('Dumbbell Squat')
-  await expect(nameInputs.nth(1)).toHaveValue('Dumbbell Romanian Deadlift')
-  await expect(nameInputs.nth(2)).toHaveValue('Push-up')
-  await expect(nameInputs.nth(3)).toHaveValue('Dumbbell Bent Over Row')
-  await expect(nameInputs.nth(4)).toHaveValue('Dead Bug')
+  // Type weight for the first exercise only, leave reps at its default, check it off
+  await page.getByLabel('Dumbbell Squat weight').fill('20')
+  await page.getByRole('button', { name: 'Mark Dumbbell Squat done' }).click()
+
+  await expect(page.locator('text=1 of 5 logged')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Undo Dumbbell Squat' })).toBeVisible()
+
+  // Partial sessions are allowed - Finish enables with just 1 logged
+  const finishBtn = page.getByRole('button', { name: 'Finish session (1)' })
+  await expect(finishBtn).toBeEnabled()
+  await finishBtn.click()
+
+  const saved = await page.evaluate(() => window.__TEST_LAST_SAVE__)
+  expect(saved.exercises).toHaveLength(1)
+  expect(saved.exercises[0].name).toBe('Dumbbell Squat')
+  expect(saved.exercises[0].sets[0].weight).toBe(20)
+  expect(saved.exercises[0].sets[0].reps).toBe(13) // lose_fat default reps, never typed - proves the pre-fill actually worked
   expect(errors).toEqual([])
+})
+
+test('quick-log requires a real weight before allowing a check-off', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__TEST_MOCK__ = {
+      workouts: [],
+      profile: {
+        goals: [], goal_note: null, height_cm: 178, onboarding_completed_at: '2026-01-01T00:00:00.000Z',
+        experience_level: 'beginner', goal_priority: ['strength'],
+      },
+      roadmapProgress: { stage: 1, started_at: new Date().toISOString(), graduated_at: null },
+      templates: [], bodyMetrics: [], exerciseTargets: {},
+    }
+  })
+  await page.goto('/test-harness.html')
+  await page.waitForSelector('text=Workouts', { timeout: 10000 })
+  await page.getByRole('button', { name: 'Roadmap' }).click()
+
+  // No weight typed - tapping check should not mark it done
+  await page.getByRole('button', { name: 'Mark Dumbbell Squat done' }).click()
+  await expect(page.getByRole('button', { name: 'Mark Dumbbell Squat done' })).toBeVisible()
+  await expect(page.locator('text=1 of 5 logged')).toHaveCount(0)
 })
 
 test('a non-beginner does not see the Roadmap tab', async ({ page }) => {
