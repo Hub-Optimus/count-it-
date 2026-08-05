@@ -270,6 +270,31 @@ export async function markRoadmapGraduated(userId) {
   if (error) throw error
 }
 
+// TEST-ONLY. Directly overwrites roadmap_progress fields so a QA account
+// can jump to any stage, simulate graduation, or reset - without waiting
+// on real logged days or the real 8-week floor. Only ever called from
+// the debug panel in Roadmap.jsx, which is itself gated to one specific
+// account email. Never reachable from normal app flow.
+export async function debugSetRoadmapProgress(userId, { stage, startedAt, graduatedAt }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_DEBUG_ROADMAP_SET__ = { stage, startedAt, graduatedAt }
+    return { stage, started_at: startedAt, graduated_at: graduatedAt }
+  }
+  const payload = { updated_at: new Date().toISOString() }
+  if (stage !== undefined) payload.stage = stage
+  if (startedAt !== undefined) payload.started_at = startedAt
+  if (graduatedAt !== undefined) payload.graduated_at = graduatedAt
+  const { data, error } = await supabase
+    .from('roadmap_progress')
+    .update(payload)
+    .eq('user_id', userId)
+    .select('stage, started_at, graduated_at')
+    .single()
+  if (error) throw error
+  return data
+}
+
 // ---- body weight log ----
 
 export async function fetchBodyMetrics(userId) {
