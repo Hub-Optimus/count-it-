@@ -3,7 +3,7 @@ import {
   BEGINNER_STAGES, STAGE_EXIT_DAYS, GRADUATION_MIN_WEEKS,
   nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate, stage1Prescription,
 } from '../lib/roadmap'
-import { advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout } from '../lib/db'
+import { advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout, debugSetRoadmapProgress } from '../lib/db'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { todayISO } from '../lib/format'
@@ -78,39 +78,96 @@ function Confetti() {
   )
 }
 
-// Inline quick-log: weight required (can't fake it - it'd corrupt real
-// workout history and every chart built on it), reps pre-filled with a
-// sensible default but editable, one tap to check off. No navigation,
-// no superset/warmup/RPE/timer chrome from the full editor - that's
-// still there via the full logger if someone wants it, this just isn't
-// the default path for Stage 1 anymore.
+// TEST-ONLY panel, gated to one specific account (checked against
+// user.email below) so it can never appear for a real user even by
+// accident. Lets that one account jump the roadmap to any state
+// instantly instead of waiting on real days/weeks, and undo back to
+// day 1 - all through debugSetRoadmapProgress, which only ever touches
+// roadmap_progress, never real workout history.
+const DEBUG_ACCOUNT_EMAIL = 'prakashkoulagi.official@gmail.com'
+
+function DebugPanel({ user, onProgressChange }) {
+  const [busy, setBusy] = useState(false)
+
+  async function run(patch) {
+    setBusy(true)
+    try {
+      const result = await debugSetRoadmapProgress(user.id, patch)
+      onProgressChange(result)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const nowIso = () => new Date().toISOString()
+  const weeksAgoIso = (n) => new Date(Date.now() - n * 7 * 24 * 60 * 60 * 1000).toISOString()
+
+  return (
+    <div className="card roadmap-debug-panel">
+      <p className="roadmap-debug-label">🛠 Debug — test account only, never visible to real users</p>
+      <div className="roadmap-debug-grid">
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => run({ stage: 1, startedAt: nowIso(), graduatedAt: null })}>
+          Jump to Stage 1
+        </button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => run({ stage: 2, graduatedAt: null })}>
+          Jump to Stage 2
+        </button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => run({ stage: 3, startedAt: weeksAgoIso(9), graduatedAt: null })}>
+          Jump to Stage 3 (floor met)
+        </button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => run({ stage: 3, graduatedAt: nowIso() })}>
+          Force graduate now
+        </button>
+      </div>
+      <button
+        type="button"
+        className="btn btn-danger btn-block"
+        style={{ marginTop: 8 }}
+        disabled={busy}
+        onClick={() => run({ stage: 1, startedAt: nowIso(), graduatedAt: null })}
+      >
+        Reset to Day 1 (undo everything above)
+      </button>
+    </div>
+  )
+}
+
+// Sequential, mascot-hosted quick-log: one exercise presented at a time
+// (matches how Duolingo-style lesson flows actually work - one thing at
+// a time, not a full lesson dumped on screen) instead of all 5 rows at
+// once. "Skip for now" preserves the earlier decision that partial
+// sessions are always allowed - going sequential shouldn't quietly
+// remove that. Weight is still required to check something off (same
+// reasoning as before: fake numbers corrupt real workout history), skip
+// is the escape hatch instead.
 function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
-  const [drafts, setDrafts] = useState({}) // name -> { weight, reps }
+  const [stepIndex, setStepIndex] = useState(0)
+  const [draft, setDraft] = useState({ weight: '', reps: '' })
   const [logged, setLogged] = useState({}) // name -> { weight, reps }
   const [saving, setSaving] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const [counterPop, setCounterPop] = useState(false)
+  const [finishedCount, setFinishedCount] = useState(null) // null = not finished yet this round
 
   const loggedCount = Object.keys(logged).length
   const unit = defaultUnit || 'kg'
+  const atSummary = stepIndex >= exercises.length
+  const current = exercises[stepIndex]
 
-  function checkOff(ex) {
-    const draft = drafts[ex.name] || {}
+  function advance() {
+    setDraft({ weight: '', reps: '' })
+    setStepIndex((i) => i + 1)
+  }
+
+  function checkOffCurrent() {
     const weight = parseFloat(draft.weight)
-    const reps = parseInt(draft.reps ?? ex.defaultReps, 10)
+    const reps = parseInt(draft.reps || current.defaultReps, 10)
     if (!weight || weight <= 0 || !reps || reps <= 0) return
-    setLogged((l) => ({ ...l, [ex.name]: { weight, reps } }))
+    setLogged((l) => ({ ...l, [current.name]: { weight, reps } }))
     playCheckSound()
     setCounterPop(true)
     setTimeout(() => setCounterPop(false), 320)
-  }
-
-  function undo(name) {
-    setLogged((l) => {
-      const next = { ...l }
-      delete next[name]
-      return next
-    })
+    advance()
   }
 
   async function finishSession() {
@@ -125,8 +182,8 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
       }))
       await insertFullWorkout(user.id, { date: todayISO(), split: null, notes: null, exercises: exercisesPayload })
       const allDone = names.length === exercises.length
+      setFinishedCount(names.length)
       setLogged({})
-      setDrafts({})
       if (allDone) {
         playCelebrationSound()
         setCelebrate(true)
@@ -138,73 +195,104 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
     }
   }
 
+  function startAnother() {
+    setFinishedCount(null)
+    setStepIndex(0)
+  }
+
+  const counter = loggedCount > 0 && (
+    <span className={`roadmap-session-counter ${counterPop ? 'pop' : ''}`}>{loggedCount} of {exercises.length} logged</span>
+  )
+
+  if (atSummary) {
+    // Just saved this round - show confirmation instead of the pre-finish
+    // summary. Kept as a separate state from stepIndex so the celebration
+    // doesn't get wiped out the instant it should appear.
+    if (finishedCount != null) {
+      return (
+        <>
+          <div className="hr" />
+          {celebrate ? (
+            <div className="roadmap-celebrate-block">
+              <Confetti />
+              <div className="roadmap-mascot-wrap"><Mascot celebrating /></div>
+              <p className="roadmap-celebration">🔥 Session logged — nice work!</p>
+            </div>
+          ) : (
+            <p className="small" style={{ margin: '4px 0' }}>Logged {finishedCount} of {exercises.length}. Nice work.</p>
+          )}
+          <button type="button" className="btn btn-primary btn-block" style={{ marginTop: 10 }} onClick={startAnother}>
+            Log another session
+          </button>
+        </>
+      )
+    }
+    return (
+      <>
+        <div className="hr" />
+        {counter}
+        <p className="small" style={{ margin: '0 0 4px' }}>
+          {loggedCount === exercises.length
+            ? "That's the full session — nice work."
+            : loggedCount > 0
+              ? "Logged what you did today. Finish whenever you're ready."
+              : 'Nothing logged this time - that\'s okay, come back whenever.'}
+        </p>
+        <button
+          className="btn btn-primary btn-block"
+          style={{ marginTop: 10 }}
+          disabled={loggedCount === 0 || saving}
+          onClick={finishSession}
+        >
+          {saving ? 'Saving…' : `Finish session${loggedCount ? ` (${loggedCount})` : ''}`}
+        </button>
+      </>
+    )
+  }
+
   return (
     <>
       <div className="hr" />
-      {loggedCount > 0 && (
-        <span className={`roadmap-session-counter ${counterPop ? 'pop' : ''}`}>{loggedCount} of {exercises.length} logged</span>
-      )}
-      <p className="small" style={{ margin: '0 0 4px' }}>
-        Today's session — same movements every time this stage, type your weight and check it off:
-      </p>
-      {exercises.map((ex) => {
-        const done = logged[ex.name]
-        const draft = drafts[ex.name] || {}
-        return (
-          <div className="quick-log-row" key={ex.name}>
-            <ExerciseIcon name={ex.name} />
-            <div className="quick-log-info">
-              <div className="quick-log-name">{ex.name}</div>
-              {done
-                ? <div className="quick-log-done-text">{done.weight}{unit} × {done.reps}</div>
-                : <div className="quick-log-target">{ex.target}</div>}
-            </div>
-            {!done && (
-              <>
-                <input
-                  className="quick-log-input"
-                  placeholder={unit}
-                  inputMode="decimal"
-                  value={draft.weight ?? ''}
-                  onChange={(e) => setDrafts((d) => ({ ...d, [ex.name]: { ...d[ex.name], weight: e.target.value } }))}
-                  aria-label={`${ex.name} weight`}
-                />
-                <input
-                  className="quick-log-input"
-                  placeholder="reps"
-                  inputMode="numeric"
-                  value={draft.reps ?? String(ex.defaultReps)}
-                  onChange={(e) => setDrafts((d) => ({ ...d, [ex.name]: { ...d[ex.name], reps: e.target.value } }))}
-                  aria-label={`${ex.name} reps`}
-                />
-              </>
-            )}
-            <button
-              type="button"
-              className={`quick-log-check ${done ? 'done' : ''}`}
-              onClick={() => (done ? undo(ex.name) : checkOff(ex))}
-              aria-label={done ? `Undo ${ex.name}` : `Mark ${ex.name} done`}
-            >
-              ✓
-            </button>
+      {counter}
+      <div className="roadmap-step-dots" aria-hidden="true">
+        {exercises.map((ex, i) => {
+          const status = i === stepIndex ? 'current' : i < stepIndex ? (logged[ex.name] ? 'done' : 'skipped') : ''
+          return <span key={i} className={`roadmap-step-dot ${status}`} />
+        })}
+      </div>
+      <div className="roadmap-step-card" key={stepIndex}>
+        <div className="roadmap-mascot-wrap"><Mascot /></div>
+        <p className="roadmap-speech-bubble">{current.line}</p>
+        <div className="quick-log-row" style={{ borderBottom: 'none' }}>
+          <ExerciseIcon name={current.name} />
+          <div className="quick-log-info">
+            <div className="quick-log-name">{current.name}</div>
+            <div className="quick-log-target">{current.target}</div>
           </div>
-        )
-      })}
-      {celebrate && (
-        <div className="roadmap-celebrate-block">
-          <Confetti />
-          <div className="roadmap-mascot-wrap"><Mascot celebrating /></div>
-          <p className="roadmap-celebration">🔥 Session logged — nice work!</p>
+          <input
+            className="quick-log-input"
+            placeholder={unit}
+            inputMode="decimal"
+            value={draft.weight}
+            onChange={(e) => setDraft((d) => ({ ...d, weight: e.target.value }))}
+            aria-label={`${current.name} weight`}
+          />
+          <input
+            className="quick-log-input"
+            placeholder="reps"
+            inputMode="numeric"
+            value={draft.reps || String(current.defaultReps)}
+            onChange={(e) => setDraft((d) => ({ ...d, reps: e.target.value }))}
+            aria-label={`${current.name} reps`}
+          />
         </div>
-      )}
-      <button
-        className="btn btn-primary btn-block"
-        style={{ marginTop: 10 }}
-        disabled={loggedCount === 0 || saving}
-        onClick={finishSession}
-      >
-        {saving ? 'Saving…' : `Finish session${loggedCount ? ` (${loggedCount})` : ''}`}
-      </button>
+        <button type="button" className="btn btn-primary btn-block" style={{ marginTop: 10 }} onClick={checkOffCurrent}>
+          Check off &amp; next
+        </button>
+        <button type="button" className="roadmap-skip-link" onClick={advance}>
+          Skip for now
+        </button>
+      </div>
     </>
   )
 }
@@ -257,14 +345,17 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
 
   if (roadmapProgress.graduated_at) {
     return (
-      <div className="card">
-        <div className="roadmap-mascot-wrap"><Mascot celebrating /></div>
-        <p style={{ fontWeight: 700, fontSize: 16, margin: 0, textAlign: 'center' }}>🎉 You've graduated Beginner</p>
-        <p className="small" style={{ marginTop: 6 }}>
-          Your regularly-trained lifts stopped moving session to session even after enough time to
-          settle — that's the real signal you're ready for Intermediate. The Intermediate roadmap
-          isn't built yet, so for now just keep logging as normal; we'll let you know the moment it's ready.
-        </p>
+      <div>
+        <div className="card">
+          <div className="roadmap-mascot-wrap"><Mascot celebrating /></div>
+          <p style={{ fontWeight: 700, fontSize: 16, margin: 0, textAlign: 'center' }}>🎉 You've graduated Beginner</p>
+          <p className="small" style={{ marginTop: 6 }}>
+            Your regularly-trained lifts stopped moving session to session even after enough time to
+            settle — that's the real signal you're ready for Intermediate. The Intermediate roadmap
+            isn't built yet, so for now just keep logging as normal; we'll let you know the moment it's ready.
+          </p>
+        </div>
+        {user.email === DEBUG_ACCOUNT_EMAIL && <DebugPanel user={user} onProgressChange={onProgressChange} />}
       </div>
     )
   }
@@ -275,7 +366,6 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
   return (
     <div>
       <div className="card">
-        <div className="roadmap-mascot-wrap"><Mascot /></div>
         <p className="small" style={{ margin: 0 }}>Stage {stage} of 3</p>
         <p style={{ fontWeight: 700, fontSize: 18, margin: '4px 0 0' }}>{current.label}</p>
         <p className="small" style={{ margin: '6px 0 0' }}>{current.blurb}</p>
@@ -327,6 +417,8 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
           )
         })}
       </div>
+
+      {user.email === DEBUG_ACCOUNT_EMAIL && <DebugPanel user={user} onProgressChange={onProgressChange} />}
     </div>
   )
 }
