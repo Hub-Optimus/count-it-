@@ -34,11 +34,11 @@ export const BEGINNER_STAGES = [
 // on a name that doesn't exist.
 
 export const STAGE_1_EXERCISES = [
-  { pattern: 'Squat', name: 'Dumbbell Squat' },
-  { pattern: 'Hinge', name: 'Dumbbell Romanian Deadlift' },
-  { pattern: 'Push', name: 'Push-up' },
-  { pattern: 'Pull', name: 'Dumbbell Bent Over Row' },
-  { pattern: 'Core', name: 'Dead Bug' },
+  { pattern: 'Squat', name: 'Dumbbell Squat', line: "First up — Dumbbell Squat. Sit back like you're reaching for a chair." },
+  { pattern: 'Hinge', name: 'Dumbbell Romanian Deadlift', line: 'Romanian Deadlift — hinge at the hips, keep that back flat.' },
+  { pattern: 'Push', name: 'Push-up', line: 'Push-up time — squeeze your core the whole way down.' },
+  { pattern: 'Pull', name: 'Dumbbell Bent Over Row', line: 'Bent Over Row — pull with your back, not just your arms.' },
+  { pattern: 'Core', name: 'Dead Bug', line: 'Last one — Dead Bug. Slow and controlled beats fast and sloppy.' },
 ]
 
 const GOAL_REP_TARGETS = {
