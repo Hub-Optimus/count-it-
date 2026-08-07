@@ -18,12 +18,31 @@ import jwt
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientError
 from postgrest.exceptions import APIError
 from supabase import Client, create_client
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_ANON_KEY = os.environ["SUPABASE_ANON_KEY"]
-SUPABASE_JWT_SECRET = os.environ["SUPABASE_JWT_SECRET"]
+# Optional now - only used as a fallback for projects still on the legacy
+# shared-secret JWT signing method. Newer Supabase projects sign tokens
+# with an asymmetric key (ES256/RS256) instead; those are verified via
+# the public JWKS endpoint below, no secret needed.
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
+
+_jwks_client = PyJWKClient(f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json")
+
+
+def decode_supabase_token(token: str) -> dict:
+    try:
+        signing_key = _jwks_client.get_signing_key_from_jwt(token)
+        return jwt.decode(token, signing_key.key, algorithms=["ES256", "RS256"], audience="authenticated")
+    except (PyJWKClientError, jwt.InvalidTokenError):
+        pass
+    if SUPABASE_JWT_SECRET:
+        return jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+    raise jwt.InvalidTokenError("Could not verify token via JWKS, and no legacy JWT secret is configured")
 
 # Comma-separated list of allowed frontend origins, e.g.
 # "https://count-it.vercel.app,https://count-it-git-test-branch-you.vercel.app"
@@ -62,12 +81,7 @@ def get_auth(authorization: str = Header(default=None)) -> AuthCtx:
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = authorization.split(" ", 1)[1].strip()
     try:
-        payload = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
+        payload = decode_supabase_token(token)
     except jwt.PyJWTError as exc:
         raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
 
