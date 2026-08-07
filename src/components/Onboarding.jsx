@@ -17,12 +17,12 @@ const PRIMARY_GOALS = [
 ]
 
 // Feeds the existing Progress-tab goal charts (goalAnalytics.js), which
-// only recognize these exact strings. This is what lets "Primary goal"
-// stay the only goal question in onboarding instead of also showing the
-// older multi-select chip picker - one answer now drives both. 'maintain'
-// deliberately maps to no chart goal: there's no clear on-pace direction
-// for it the way there is for the others, so an empty array gives the
-// honest "no goals set" state instead of a confusing "unsupported" card.
+// only recognize these exact strings. Goals are now a ranked multi-select
+// (order = priority, first tap drives the roadmap) rather than one pick,
+// so every goal the user selected contributes its chart(s), not just the
+// top one - a secondary goal actually shows up, instead of being decorative.
+// 'maintain' deliberately maps to no chart goal: there's no clear on-pace
+// direction for it the way there is for the others.
 // Someone can still hand-pick specific chart goals later from Settings.
 const PRIMARY_GOAL_TO_CHART_GOALS = {
   lose_fat: ['Lose weight'],
@@ -31,6 +31,15 @@ const PRIMARY_GOAL_TO_CHART_GOALS = {
   general_fitness: ['General fitness'],
   strength: ['Build strength'],
   endurance: ['Improve stamina'],
+}
+
+// Union of chart goals across every selected goal, de-duplicated. Order
+// follows PRIMARY_GOALS order (not selection order) so the chart list is
+// stable regardless of which goal the user tapped first.
+function chartGoalsFor(goalPriority) {
+  const set = new Set()
+  goalPriority.forEach((g) => (PRIMARY_GOAL_TO_CHART_GOALS[g] ?? []).forEach((cg) => set.add(cg)))
+  return [...set]
 }
 
 // Only these goals give a clear direction for a weight target - asking
@@ -82,7 +91,9 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
 
   // Step 2
   const [goalNote, setGoalNote] = useState(initial?.goal_note ?? '')
-  const [primaryGoal, setPrimaryGoal] = useState(initial?.primary_goal ?? '')
+  // Order matters: index 0 is the top-ranked goal (drives the roadmap),
+  // the rest still shape session composition. Order = tap order.
+  const [goalPriority, setGoalPriority] = useState(initial?.goal_priority ?? [])
   const [targetWeight, setTargetWeight] = useState(initial?.target_weight ?? '')
   const [targetWeightUnit, setTargetWeightUnit] = useState(initial?.target_weight_unit ?? defaultUnit)
   const [activityLevel, setActivityLevel] = useState(initial?.activity_level ?? '')
@@ -103,7 +114,7 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
   // actually changes, rather than leaving a stale warning up until the
   // next Continue click.
   useEffect(() => { setError('') }, [dateOfBirth, sex, heightCm, weight])
-  useEffect(() => { setError('') }, [primaryGoal, activityLevel, experienceLevel, trainLocations, hasTrainer])
+  useEffect(() => { setError('') }, [goalPriority, activityLevel, experienceLevel, trainLocations, hasTrainer])
 
   function missingStep1Fields() {
     const missing = []
@@ -116,7 +127,7 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
 
   function missingStep2Fields() {
     const missing = []
-    if (!primaryGoal) missing.push('Primary goal')
+    if (goalPriority.length === 0) missing.push('At least one goal')
     if (!activityLevel) missing.push('Activity level')
     if (!experienceLevel) missing.push('Experience level')
     if (trainLocations.length === 0) missing.push('Where you train')
@@ -140,21 +151,22 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
     setBusy(true)
     setError('')
     try {
+      const topGoal = goalPriority[0]
       await saveOnboarding(user.id, {
         dateOfBirth, sex, heightCm: parseFloat(heightCm), weight: parseFloat(weight), weightUnit,
-        goals: PRIMARY_GOAL_TO_CHART_GOALS[primaryGoal] ?? [], goalNote: goalNote.trim(),
-        primaryGoal,
-        targetWeight: WEIGHT_RELEVANT_GOALS.includes(primaryGoal) && targetWeight ? parseFloat(targetWeight) : null,
-        targetWeightUnit: WEIGHT_RELEVANT_GOALS.includes(primaryGoal) && targetWeight ? targetWeightUnit : null,
+        goals: chartGoalsFor(goalPriority), goalNote: goalNote.trim(),
+        goalPriority,
+        targetWeight: WEIGHT_RELEVANT_GOALS.includes(topGoal) && targetWeight ? parseFloat(targetWeight) : null,
+        targetWeightUnit: WEIGHT_RELEVANT_GOALS.includes(topGoal) && targetWeight ? targetWeightUnit : null,
         activityLevel, experienceLevel, trainLocations, hasTrainer,
         injuryNotes: injuryNotes.trim(),
         workoutDaysPerWeek: workoutDaysPerWeek ? parseInt(workoutDaysPerWeek, 10) : null,
         remindersEnabled, restDayNudgesEnabled, dietaryPrefs,
       })
       onDone?.({
-        goals: PRIMARY_GOAL_TO_CHART_GOALS[primaryGoal] ?? [], goal_note: goalNote.trim() || null, height_cm: parseFloat(heightCm),
+        goals: chartGoalsFor(goalPriority), goal_note: goalNote.trim() || null, height_cm: parseFloat(heightCm),
         date_of_birth: dateOfBirth, sex,
-        primary_goal: primaryGoal, activity_level: activityLevel, experience_level: experienceLevel,
+        goal_priority: goalPriority, activity_level: activityLevel, experience_level: experienceLevel,
         train_locations: trainLocations, has_trainer: hasTrainer,
         onboarding_completed_at: new Date().toISOString(),
       })
@@ -221,16 +233,23 @@ export default function Onboarding({ user, initial, defaultUnit = 'kg', onDone }
           <p className="auth-tag">What are you working toward?</p>
 
           <div className="field">
-            <label className="label">Primary goal <span className="required-star">*</span></label>
+            <label className="label">Your goals <span className="required-star">*</span></label>
+            <p className="field-hint">Tap in the order that matters most to you — your first pick shapes your roadmap.</p>
             <div className="chip-row">
-              {PRIMARY_GOALS.map((o) => (
-                <button key={o.v} className={`chip ${primaryGoal === o.v ? 'on' : ''}`} onClick={() => setPrimaryGoal(o.v)}>{o.label}</button>
-              ))}
+              {PRIMARY_GOALS.map((o) => {
+                const rank = goalPriority.indexOf(o.v)
+                return (
+                  <button key={o.v} className={`chip ${rank >= 0 ? 'on' : ''}`} onClick={() => setGoalPriority((l) => toggleInList(l, o.v))}>
+                    {rank >= 0 && <span className="chip-rank" aria-hidden="true">{rank + 1}</span>}
+                    {o.label}
+                  </button>
+                )
+              })}
             </div>
             <input className="input" style={{ marginTop: 8 }} placeholder="Anything else about your goal? (optional)" value={goalNote} onChange={(e) => setGoalNote(e.target.value)} />
           </div>
 
-          {WEIGHT_RELEVANT_GOALS.includes(primaryGoal) && (
+          {WEIGHT_RELEVANT_GOALS.includes(goalPriority[0]) && (
             <div className="field">
               <label className="label">Target weight (optional)</label>
               <div className="set-row" style={{ gridTemplateColumns: '1fr 60px' }}>

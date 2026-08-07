@@ -6,8 +6,13 @@
 // navigating here, so this one harness works for every Main-based
 // test rather than needing a new harness file per scenario. See
 // tests/README.md for the exact shape of __TEST_MOCK__.
+//
+// userEmail is optional and defaults to 'test@example.com' - only set
+// it when a test specifically needs to check email-gated behavior
+// (e.g. the roadmap debug panel).
 import { createRoot } from 'react-dom/client'
 import { Main } from './App'
 
+const overrideEmail = typeof window !== 'undefined' ? window.__TEST_MOCK__?.userEmail : undefined
 const root = createRoot(document.getElementById('root'))
-root.render(<Main user={{ id: 'test-user', email: 'test@example.com' }} />)
+root.render(<Main user={{ id: 'test-user', email: overrideEmail || 'test@example.com' }} />)

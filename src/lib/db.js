@@ -131,7 +131,7 @@ export async function fetchProfile(userId) {
     .select(`
       goals, goal_note, height_cm,
       date_of_birth, sex,
-      primary_goal, target_weight, target_weight_unit, activity_level, experience_level, train_locations, has_trainer,
+      goal_priority, target_weight, target_weight_unit, activity_level, experience_level, train_locations, has_trainer,
       injury_notes, workout_days_per_week, reminders_enabled, rest_day_nudges_enabled, dietary_prefs,
       onboarding_completed_at
     `)
@@ -168,12 +168,12 @@ export async function saveHeight(userId, heightCm) {
 export async function saveOnboarding(userId, {
   dateOfBirth, sex, heightCm, weight, weightUnit,
   goals, goalNote,
-  primaryGoal, targetWeight, targetWeightUnit, activityLevel, experienceLevel, trainLocations, hasTrainer,
+  goalPriority, targetWeight, targetWeightUnit, activityLevel, experienceLevel, trainLocations, hasTrainer,
   injuryNotes, workoutDaysPerWeek, remindersEnabled, restDayNudgesEnabled, dietaryPrefs,
 }) {
   const mock = testMock()
   if (mock) {
-    window.__TEST_LAST_SAVE__ = { dateOfBirth, sex, heightCm, weight, weightUnit, primaryGoal, hasTrainer }
+    window.__TEST_LAST_SAVE__ = { dateOfBirth, sex, heightCm, weight, weightUnit, goalPriority, hasTrainer }
   } else {
     const { error } = await supabase.from('profiles').upsert({
       user_id: userId,
@@ -182,7 +182,7 @@ export async function saveOnboarding(userId, {
       height_cm: heightCm ?? null,
       goals: goals || [],
       goal_note: goalNote || null,
-      primary_goal: primaryGoal || null,
+      goal_priority: goalPriority || [],
       target_weight: targetWeight ?? null,
       target_weight_unit: targetWeightUnit || null,
       activity_level: activityLevel || null,
@@ -199,12 +199,100 @@ export async function saveOnboarding(userId, {
     })
     if (error) throw error
   }
-  // Runs in both mock and real mode - insertBodyMetric handles its own
-  // mock branch, so this stays one single code path either way instead
-  // of two that can silently drift apart.
+  // Runs in both mock and real mode - insertBodyMetric and
+  // initRoadmapProgress each handle their own mock branch, so this
+  // stays one single code path either way instead of two that can
+  // silently drift apart.
   if (weight) {
     await insertBodyMetric(userId, { date: todayISO(), weight, weightUnit: weightUnit || 'kg' })
   }
+  // Only beginners get a roadmap right now - Intermediate/Advanced
+  // roadmaps are a later phase. Re-running onboarding (e.g. editing
+  // answers) won't create a second row - initRoadmapProgress no-ops if
+  // one already exists.
+  if (experienceLevel === 'beginner') {
+    await initRoadmapProgress(userId)
+  }
+}
+
+// ---- beginner roadmap ----
+
+export async function initRoadmapProgress(userId) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_ROADMAP_INIT__ = { userId }
+    return
+  }
+  const { error } = await supabase
+    .from('roadmap_progress')
+    .upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true })
+  if (error) throw error
+}
+
+export async function fetchRoadmapProgress(userId) {
+  const mock = testMock()
+  if (mock) return mock.roadmapProgress ?? null
+  const { data, error } = await supabase
+    .from('roadmap_progress')
+    .select('stage, started_at, graduated_at')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// Called from the roadmap screen whenever computed progress says the
+// user has actually earned the next stage. Only ever moves forward -
+// the screen itself decides when to call this, this just persists it.
+export async function advanceRoadmapStage(userId, stage) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_ROADMAP_STAGE__ = stage
+    return
+  }
+  const { error } = await supabase
+    .from('roadmap_progress')
+    .update({ stage, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+  if (error) throw error
+}
+
+export async function markRoadmapGraduated(userId) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_ROADMAP_GRADUATED__ = true
+    return
+  }
+  const { error } = await supabase
+    .from('roadmap_progress')
+    .update({ graduated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+  if (error) throw error
+}
+
+// TEST-ONLY. Directly overwrites roadmap_progress fields so a QA account
+// can jump to any stage, simulate graduation, or reset - without waiting
+// on real logged days or the real 8-week floor. Only ever called from
+// the debug panel in Roadmap.jsx, which is itself gated to one specific
+// account email. Never reachable from normal app flow.
+export async function debugSetRoadmapProgress(userId, { stage, startedAt, graduatedAt }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_DEBUG_ROADMAP_SET__ = { stage, startedAt, graduatedAt }
+    return { stage, started_at: startedAt, graduated_at: graduatedAt }
+  }
+  const payload = { updated_at: new Date().toISOString() }
+  if (stage !== undefined) payload.stage = stage
+  if (startedAt !== undefined) payload.started_at = startedAt
+  if (graduatedAt !== undefined) payload.graduated_at = graduatedAt
+  const { data, error } = await supabase
+    .from('roadmap_progress')
+    .update(payload)
+    .eq('user_id', userId)
+    .select('stage, started_at, graduated_at')
+    .single()
+  if (error) throw error
+  return data
 }
 
 // ---- body weight log ----

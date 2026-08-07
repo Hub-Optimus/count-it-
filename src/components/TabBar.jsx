@@ -37,11 +37,19 @@ const icons = {
       <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8" />
     </svg>
   ),
+  roadmap: (
+    // winding path with a flag at the end
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 20c3-6 6 3 9-3s3-9 9-9" />
+      <path d="M19 3v6h-4" />
+    </svg>
+  ),
 }
 
-export default function TabBar({ tab, onChange, user, sessionCount }) {
+export default function TabBar({ tab, onChange, user, sessionCount, showRoadmap }) {
   const tabs = [
     { id: 'log', label: 'Workouts' },
+    ...(showRoadmap ? [{ id: 'roadmap', label: 'Roadmap' }] : []),
     { id: 'progress', label: 'Progress' },
     { id: 'settings', label: 'Settings' },
   ]
