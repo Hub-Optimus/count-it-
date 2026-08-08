@@ -297,6 +297,7 @@ button { cursor: pointer; }
 }
 
 .roadmap-bar-track {
+  position: relative;
   height: 8px;
   border-radius: 999px;
   background: var(--card-2);
@@ -309,6 +310,14 @@ button { cursor: pointer; }
   background: var(--yellow);
   border-radius: 999px;
   transition: width 0.3s ease;
+}
+
+.roadmap-bar-milestone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(242, 239, 232, 0.35);
 }
 
 .roadmap-mascot { color: var(--ink); display: block; }
