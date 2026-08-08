@@ -303,10 +303,10 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
 // content yet, so they stay overview-only for now - not an oversight,
 // just not built.
 export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapProgress, onProgressChange, onLogged }) {
-  const days = useMemo(() => distinctLoggedDays(workouts), [workouts])
+  const days = useMemo(() => distinctLoggedDays(workouts, roadmapProgress?.started_at), [workouts, roadmapProgress])
   const stage1Exercises = useMemo(() => stage1Prescription(profile?.goal_priority ?? []), [profile])
   const computedStage = useMemo(
-    () => (roadmapProgress ? nextStage(roadmapProgress.stage, workouts) : null),
+    () => (roadmapProgress ? nextStage(roadmapProgress.stage, workouts, roadmapProgress.started_at) : null),
     [roadmapProgress, workouts],
   )
   const readyToGraduate = useMemo(

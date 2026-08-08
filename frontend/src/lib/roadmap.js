@@ -79,8 +79,10 @@ const STAGE_2_EXIT_DAYS = 12  // roughly a month at 3x/week - the real grind
 
 export const STAGE_EXIT_DAYS = { 1: STAGE_1_EXIT_DAYS, 2: STAGE_2_EXIT_DAYS }
 
-export function distinctLoggedDays(workouts) {
-  return new Set(workouts.map((w) => w.date)).size
+export function distinctLoggedDays(workouts, sinceIso) {
+  const since = sinceIso ? sinceIso.slice(0, 10) : null
+  const relevant = since ? workouts.filter((w) => w.date >= since) : workouts
+  return new Set(relevant.map((w) => w.date)).size
 }
 
 export function weeksSince(dateIso) {
@@ -88,9 +90,13 @@ export function weeksSince(dateIso) {
 }
 
 // Returns the stage the user should be on given their logged history.
-// Never moves a user backward - only forward or unchanged.
-export function nextStage(currentStage, workouts) {
-  const days = distinctLoggedDays(workouts)
+// Never moves a user backward - only forward or unchanged. Counts days
+// since the current stage's started_at, not all-time - otherwise once
+// someone has enough total history, manually resetting the stage (debug
+// tools, or a future real "restart" action) gets immediately overridden
+// back up by this same function on the very next render.
+export function nextStage(currentStage, workouts, startedAtIso) {
+  const days = distinctLoggedDays(workouts, startedAtIso)
   if (currentStage === 1 && days >= STAGE_1_EXIT_DAYS) return 2
   if (currentStage === 2 && days >= STAGE_2_EXIT_DAYS) return 3
   return currentStage
