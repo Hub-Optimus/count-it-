@@ -5,6 +5,7 @@ import { todayISO } from './lib/format'
 import { peekDraft } from './lib/draft'
 import TabBar, { Tally } from './components/TabBar'
 import Auth from './components/Auth'
+import ResetPassword from './components/ResetPassword'
 import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
 import SidePanel from './components/SidePanel'
@@ -34,11 +35,18 @@ function currentBundleSrc() {
 
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still checking
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   useEffect(() => {
     if (!configured) return
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      // Fires when someone lands here via a "reset your password" email
+      // link - Supabase has already turned that link into a real session
+      // by this point, so all that's left is asking for a new password.
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      setSession(s)
+    })
     return () => subscription.unsubscribe()
   }, [])
 
@@ -63,6 +71,10 @@ export default function App() {
         <Tally size={52} />
       </div>
     )
+  }
+
+  if (passwordRecovery) {
+    return <ResetPassword onDone={() => setPasswordRecovery(false)} />
   }
 
   if (!session) return <Auth />
