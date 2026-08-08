@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchVideos, createVideo, deleteVideo } from '../lib/db'
-import { STAGE_1_EXERCISES } from '../lib/roadmap'
+import { STAGE_1_EXERCISES, STAGE_2_EXERCISES } from '../lib/roadmap'
 
-const STAGE_1_EXERCISE_NAMES = STAGE_1_EXERCISES.map((ex) => ex.name)
+const EXERCISE_NAMES = [...STAGE_1_EXERCISES, ...STAGE_2_EXERCISES].map((ex) => ex.name)
 
 // Same account already gated for the roadmap debug panel - reusing it
 // here so upload access lives in exactly one place to keep in sync.
@@ -122,7 +122,7 @@ function UploadForm({ onUploaded }) {
         <label className="label" htmlFor="video-exercise">Replace the built-in video for this exercise (optional)</label>
         <select id="video-exercise" className="input" value={exerciseName} onChange={(e) => setExerciseName(e.target.value)}>
           <option value="">Not exercise-specific</option>
-          {STAGE_1_EXERCISE_NAMES.map((name) => (
+          {EXERCISE_NAMES.map((name) => (
             <option key={name} value={name}>{name}</option>
           ))}
         </select>

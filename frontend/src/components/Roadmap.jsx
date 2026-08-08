@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   BEGINNER_STAGES, STAGE_EXIT_DAYS, GRADUATION_MIN_WEEKS, GRADUATION_REWARD_AMOUNT,
   STAGE_2_MILESTONES, STAGE_2_MILESTONE_COPY, nextPendingStage2Milestone,
-  nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate, stage1Prescription,
-  STAGE_1_VIDEO_IDS, youtubeEmbedUrl,
+  nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate,
+  stage1Prescription, stage2Prescription, EXERCISE_VIDEO_IDS, youtubeEmbedUrl,
 } from '../lib/roadmap'
 import {
   advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout, debugSetRoadmapProgress,
@@ -14,6 +14,7 @@ import { PICTOGRAMS } from '../lib/pictograms'
 import { todayISO } from '../lib/format'
 import { playCheckSound, playCelebrationSound } from '../lib/sound'
 import LearningVideos from './LearningVideos'
+import ExercisePicker from './ExercisePicker'
 import { Tally } from './TabBar'
 
 // Reuses the app's real pictogram set (same one ExercisePicker uses) so
@@ -186,9 +187,13 @@ function DebugPanel({ user, onProgressChange }) {
 // remove that. Weight is still required to check something off (same
 // reasoning as before: fake numbers corrupt real workout history), skip
 // is the escape hatch instead.
-function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
+function QuickLogSession({ user, exercises: fixedExercises, defaultUnit, onLogged }) {
+  const [extraExercises, setExtraExercises] = useState([]) // manually added via the picker, on top of the fixed list
+  const [showPicker, setShowPicker] = useState(false)
+  const exercises = useMemo(() => [...fixedExercises, ...extraExercises], [fixedExercises, extraExercises])
+
   const [drafts, setDrafts] = useState(() =>
-    Object.fromEntries(exercises.map((ex) => [ex.name, { weight: '', reps: String(ex.defaultReps), done: false }])),
+    Object.fromEntries(fixedExercises.map((ex) => [ex.name, { weight: '', reps: String(ex.defaultReps), done: false }])),
   )
   const [saving, setSaving] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
@@ -202,12 +207,20 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
 
   // An admin-uploaded video tagged with this exact exercise name always
   // wins over the built-in YouTube embed - upload one and it takes over
-  // automatically, no code change needed.
+  // automatically, no code change needed. Exercises added via the picker
+  // (outside the fixed lists) have no curated ID, so they just get none.
   function videoFor(name) {
     const uploaded = uploadedVideos.find((v) => v.exerciseName === name)
     if (uploaded) return { type: 'uploaded', url: uploaded.url }
-    const ytId = STAGE_1_VIDEO_IDS[name]
+    const ytId = EXERCISE_VIDEO_IDS[name]
     return ytId ? { type: 'youtube', url: youtubeEmbedUrl(ytId) } : null
+  }
+
+  function addExercise(name) {
+    if (exercises.some((ex) => ex.name === name)) return // already in the list, don't duplicate
+    const added = { name, target: '8-12 reps × 3 sets', defaultReps: 10 }
+    setExtraExercises((prev) => [...prev, added])
+    setDrafts((d) => ({ ...d, [name]: { weight: '', reps: String(added.defaultReps), done: false } }))
   }
 
   const unit = defaultUnit || 'kg'
@@ -256,7 +269,8 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
 
   function startAnother() {
     setFinishedCount(null)
-    setDrafts(Object.fromEntries(exercises.map((ex) => [ex.name, { weight: '', reps: String(ex.defaultReps), done: false }])))
+    setExtraExercises([])
+    setDrafts(Object.fromEntries(fixedExercises.map((ex) => [ex.name, { weight: '', reps: String(ex.defaultReps), done: false }])))
   }
 
   if (finishedCount != null) {
@@ -333,6 +347,9 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
           </div>
         )
       })}
+      <button type="button" className="btn btn-ghost btn-block" style={{ marginTop: 4 }} onClick={() => setShowPicker(true)}>
+        + Add exercise
+      </button>
       <button
         className="btn btn-primary btn-block"
         style={{ marginTop: 10 }}
@@ -341,6 +358,10 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
       >
         {saving ? 'Saving…' : `Finish session${doneCount ? ` (${doneCount})` : ''}`}
       </button>
+
+      {showPicker && (
+        <ExercisePicker onSelect={addExercise} onClose={() => setShowPicker(false)} />
+      )}
 
       {videoModalFor && (
         <div className="timer-modal-overlay" onClick={() => setVideoModalFor(null)}>
@@ -388,6 +409,7 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
 export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapProgress, onProgressChange, onLogged }) {
   const days = useMemo(() => distinctLoggedDays(workouts, roadmapProgress?.started_at), [workouts, roadmapProgress])
   const stage1Exercises = useMemo(() => stage1Prescription(profile?.goal_priority ?? []), [profile])
+  const stage2Exercises = useMemo(() => stage2Prescription(profile?.goal_priority ?? []), [profile])
   const computedStage = useMemo(
     () => (roadmapProgress ? nextStage(roadmapProgress.stage, workouts, roadmapProgress.started_at) : null),
     [roadmapProgress, workouts],
@@ -512,6 +534,10 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
 
         {stage === 1 && (
           <QuickLogSession user={user} exercises={stage1Exercises} defaultUnit={defaultUnit} onLogged={onLogged} />
+        )}
+
+        {stage === 2 && (
+          <QuickLogSession user={user} exercises={stage2Exercises} defaultUnit={defaultUnit} onLogged={onLogged} />
         )}
 
         {stage === 3 && (

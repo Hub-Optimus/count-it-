@@ -59,14 +59,36 @@ const GOAL_REP_TARGETS = {
 const CORE_TARGET = { display: '8-10 reps per side × 3 sets', defaultReps: 9 }
 
 // goalPriority[0] (top-ranked goal) drives the prescription - the rest
-// of the ranked list doesn't affect Stage 1's numbers, only which chart
-// goals light up (see Onboarding.jsx's chartGoalsFor).
-export function stage1Prescription(goalPriority) {
+// of the ranked list doesn't affect the numbers, only which chart goals
+// light up (see Onboarding.jsx's chartGoalsFor). Shared between Stage 1
+// and Stage 2's exercise lists so the rep-range logic isn't duplicated.
+function prescriptionFor(exerciseList, goalPriority) {
   const target = GOAL_REP_TARGETS[goalPriority?.[0]] ?? GOAL_REP_TARGETS.general_fitness
-  return STAGE_1_EXERCISES.map((ex) => {
+  return exerciseList.map((ex) => {
     const t = ex.pattern === 'Core' ? CORE_TARGET : target
     return { ...ex, target: t.display, defaultReps: t.defaultReps }
   })
+}
+
+export function stage1Prescription(goalPriority) {
+  return prescriptionFor(STAGE_1_EXERCISES, goalPriority)
+}
+
+// Stage 2's own fixed list - one small step up from Stage 1's basics
+// (single-limb and loaded-bench variants instead of the simplest bilateral
+// versions), same 5 movement patterns plus a dedicated overhead press so
+// the set covers push (horizontal + vertical), pull, hinge, squat, core.
+export const STAGE_2_EXERCISES = [
+  { pattern: 'Squat', name: 'Dumbbell Goblet Squat', line: 'Goblet Squat — hold it close to your chest, elbows inside your knees at the bottom.' },
+  { pattern: 'Hinge', name: 'Dumbbell Single Leg Deadlift', line: 'Single Leg Deadlift — soft bend in the standing knee, hinge don\'t squat.' },
+  { pattern: 'Push', name: 'Dumbbell Bench Press', line: 'Bench Press — dumbbells over your chest, elbows at about 45°.' },
+  { pattern: 'Push', name: 'Dumbbell Standing Overhead Press', line: 'Overhead Press — brace your core so your lower back doesn\'t arch.' },
+  { pattern: 'Pull', name: 'Dumbbell One Arm Bent-over Row', line: 'One Arm Row — free hand braced, pull with your elbow, not your hand.' },
+  { pattern: 'Core', name: 'Russian Twist', line: 'Russian Twist — rotate from your ribs, not just your arms.' },
+]
+
+export function stage2Prescription(goalPriority) {
+  return prescriptionFor(STAGE_2_EXERCISES, goalPriority)
 }
 
 // A search link, not a curated single video - the exercise library has
@@ -78,18 +100,26 @@ export function youtubeHowToUrl(exerciseName) {
   return `https://www.youtube.com/results?search_query=${query}`
 }
 
-// Curated, embeddable videos for the 5 fixed Stage 1 exercises
+// Curated, embeddable videos for the fixed Stage 1 + Stage 2 exercises
 // specifically - picked once, good enough to trust without a search
 // each time. Preview these yourself once; swap the ID if any don't
 // look right. Overridden automatically per-exercise the moment an
 // admin-uploaded video with a matching exerciseName exists (see
-// LearningVideos.jsx / db.js fetchVideos).
-export const STAGE_1_VIDEO_IDS = {
+// LearningVideos.jsx / db.js fetchVideos). Exercises added via the
+// picker (outside these two fixed lists) simply get no video link -
+// there's no curated ID to fall back to for arbitrary library entries.
+export const EXERCISE_VIDEO_IDS = {
   'Dumbbell Squat': 'ZXwvmRSRRxY',
   'Dumbbell Romanian Deadlift': 'ndfZi5fDaVM',
   'Push-up': 'BeC7ewqJsjI',
   'Dumbbell Bent Over Row': 'c-gt-zzoa_A',
   'Dead Bug': '3eqodmkpkfA',
+  'Dumbbell Goblet Squat': 'zsN2WvklwDk',
+  'Dumbbell Single Leg Deadlift': 'vwbYrwrF8fM',
+  'Dumbbell Bench Press': 'J-gWN5hYwRU',
+  'Dumbbell Standing Overhead Press': 'XOFmNo9F-JQ',
+  'Dumbbell One Arm Bent-over Row': 'PQ1X977ag5E',
+  'Russian Twist': 'jjyR6Z1U4dA',
 }
 
 export function youtubeEmbedUrl(videoId) {
