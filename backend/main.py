@@ -324,7 +324,7 @@ def init_roadmap(ctx: AuthCtx = Depends(get_auth)):
 def fetch_roadmap(ctx: AuthCtx = Depends(get_auth)):
     res = (
         ctx.client.table("roadmap_progress")
-        .select("stage, started_at, graduated_at, reward_amount, reward_status")
+        .select("stage, started_at, graduated_at, reward_amount, reward_status, stage2_milestones_seen")
         .eq("user_id", ctx.user_id)
         .maybe_single()
         .execute()
@@ -338,6 +338,25 @@ def advance_roadmap_stage(body: dict = Body(...), ctx: AuthCtx = Depends(get_aut
         {"stage": body.get("stage"), "updated_at": now_iso()}
     ).eq("user_id", ctx.user_id).execute()
     return {"ok": True}
+
+
+@app.put("/api/roadmap/milestone")
+def mark_stage2_milestone_seen(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
+    day = body.get("day")
+    res = (
+        ctx.client.table("roadmap_progress")
+        .select("stage2_milestones_seen")
+        .eq("user_id", ctx.user_id)
+        .maybe_single()
+        .execute()
+    )
+    current = (res.data or {}).get("stage2_milestones_seen") or []
+    if day not in current:
+        current = sorted(set(current) | {day})
+        ctx.client.table("roadmap_progress").update(
+            {"stage2_milestones_seen": current, "updated_at": now_iso()}
+        ).eq("user_id", ctx.user_id).execute()
+    return {"stage2_milestones_seen": current}
 
 
 @app.post("/api/roadmap/graduate")
@@ -364,6 +383,11 @@ def debug_set_roadmap_progress(body: dict = Body(...), ctx: AuthCtx = Depends(ge
     payload = {"updated_at": now_iso()}
     if "stage" in body:
         payload["stage"] = body["stage"]
+        # Debug jumping to stage 1 should also clear seen milestones -
+        # otherwise re-testing the stage 2 celebrations shows nothing
+        # because they're already marked seen from a previous test pass.
+        if body["stage"] == 1:
+            payload["stage2_milestones_seen"] = []
     if "startedAt" in body:
         payload["started_at"] = body["startedAt"]
     if "graduatedAt" in body:
@@ -524,7 +548,7 @@ def video_public_url(storage_path: str) -> str:
 def fetch_videos(ctx: AuthCtx = Depends(get_auth)):
     res = (
         ctx.client.table("learning_videos")
-        .select("id, title, description, storage_path, stage, created_at")
+        .select("id, title, description, storage_path, stage, exercise_name, created_at")
         .order("created_at", desc=True)
         .execute()
     )
@@ -534,6 +558,7 @@ def fetch_videos(ctx: AuthCtx = Depends(get_auth)):
             "title": v["title"],
             "description": v["description"],
             "stage": v["stage"],
+            "exerciseName": v["exercise_name"],
             "url": video_public_url(v["storage_path"]),
         }
         for v in (res.data or [])
@@ -555,6 +580,7 @@ def create_video(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
                 "description": body.get("description") or None,
                 "storage_path": body.get("storagePath"),
                 "stage": body.get("stage"),
+                "exercise_name": body.get("exerciseName") or None,
             }
         )
         .execute()
