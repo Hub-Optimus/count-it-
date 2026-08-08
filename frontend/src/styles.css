@@ -320,6 +320,12 @@ button { cursor: pointer; }
   background: rgba(242, 239, 232, 0.35);
 }
 
+.roadmap-video-embed {
+  margin: 0 0 12px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
 .roadmap-mascot { color: var(--ink); display: block; }
 
 .roadmap-mascot-wrap {

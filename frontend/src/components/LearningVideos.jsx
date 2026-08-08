@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchVideos, createVideo, deleteVideo } from '../lib/db'
+import { STAGE_1_EXERCISES } from '../lib/roadmap'
+
+const STAGE_1_EXERCISE_NAMES = STAGE_1_EXERCISES.map((ex) => ex.name)
 
 // Same account already gated for the roadmap debug panel - reusing it
 // here so upload access lives in exactly one place to keep in sync.
@@ -54,6 +57,7 @@ function UploadForm({ onUploaded }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [stage, setStage] = useState('')
+  const [exerciseName, setExerciseName] = useState('')
   const [file, setFile] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -79,10 +83,12 @@ function UploadForm({ onUploaded }) {
         description: description.trim() || null,
         storagePath: path,
         stage: stage ? Number(stage) : null,
+        exerciseName: exerciseName || null,
       })
       setTitle('')
       setDescription('')
       setStage('')
+      setExerciseName('')
       setFile(null)
       onUploaded()
     } catch (e) {
@@ -110,6 +116,15 @@ function UploadForm({ onUploaded }) {
           <option value="1">Stage 1 — Learn the Lifts</option>
           <option value="2">Stage 2 — Build the Base</option>
           <option value="3">Stage 3 — Ready to Graduate</option>
+        </select>
+      </div>
+      <div className="field">
+        <label className="label" htmlFor="video-exercise">Replace the built-in video for this exercise (optional)</label>
+        <select id="video-exercise" className="input" value={exerciseName} onChange={(e) => setExerciseName(e.target.value)}>
+          <option value="">Not exercise-specific</option>
+          {STAGE_1_EXERCISE_NAMES.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
         </select>
       </div>
       <div className="field">
