@@ -217,3 +217,24 @@ export async function saveTemplate(userId, name, exerciseNames) {
 export async function deleteTemplate(id) {
   await api.del(`/api/templates/${id}`)
 }
+
+// ---- learning videos (beginner roadmap) ----
+
+export async function fetchVideos() {
+  const mock = testMock()
+  if (mock) return mock.videos ?? []
+  return api.get('/api/videos')
+}
+
+export async function createVideo({ title, description, storagePath, stage }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { title, description, storagePath, stage }
+    return
+  }
+  await api.post('/api/videos', { title, description, storagePath, stage })
+}
+
+export async function deleteVideo(id) {
+  await api.del(`/api/videos/${id}`)
+}
