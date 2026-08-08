@@ -546,10 +546,11 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
         })}
       </div>
 
-      {/* Stage 1 already gets its own per-exercise "how to" video links
-          above - the general video library is redundant there and just
-          adds clutter. Still useful once past Stage 1. */}
-      {stage !== 1 && <LearningVideos user={user} />}
+      {/* Stage 1 has its own per-exercise "how to" video links. Stage 2
+          is the long grind (12 days) - keeping it distraction-free with
+          just the progress bar and milestones. Video library shows up
+          again once someone reaches Stage 3. */}
+      {stage === 3 && <LearningVideos user={user} />}
 
       {user.email === DEBUG_ACCOUNT_EMAIL && <DebugPanel user={user} onProgressChange={onProgressChange} />}
     </div>
