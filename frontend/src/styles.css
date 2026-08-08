@@ -326,6 +326,15 @@ button { cursor: pointer; }
   border-bottom: 1px solid var(--line);
 }
 
+.roadmap-video-modal {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 480px;
+  padding: 16px;
+}
+
 .roadmap-mascot { color: var(--ink); display: block; }
 
 .roadmap-mascot-wrap {

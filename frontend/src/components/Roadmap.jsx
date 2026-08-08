@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   BEGINNER_STAGES, STAGE_EXIT_DAYS, GRADUATION_MIN_WEEKS, GRADUATION_REWARD_AMOUNT,
   STAGE_2_MILESTONES, STAGE_2_MILESTONE_COPY, nextPendingStage2Milestone,
-  nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate, stage1Prescription, youtubeHowToUrl,
+  nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate, stage1Prescription,
+  STAGE_1_VIDEO_IDS, youtubeEmbedUrl,
 } from '../lib/roadmap'
 import {
   advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout, debugSetRoadmapProgress,
-  markStage2MilestoneSeen,
+  markStage2MilestoneSeen, fetchVideos,
 } from '../lib/db'
 import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
@@ -192,6 +193,22 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
   const [saving, setSaving] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const [finishedCount, setFinishedCount] = useState(null) // null = not finished yet this round
+  const [videoModalFor, setVideoModalFor] = useState(null) // exercise name shown in the video popup, or null
+  const [uploadedVideos, setUploadedVideos] = useState([])
+
+  useEffect(() => {
+    fetchVideos().then(setUploadedVideos).catch(() => setUploadedVideos([]))
+  }, [])
+
+  // An admin-uploaded video tagged with this exact exercise name always
+  // wins over the built-in YouTube embed - upload one and it takes over
+  // automatically, no code change needed.
+  function videoFor(name) {
+    const uploaded = uploadedVideos.find((v) => v.exerciseName === name)
+    if (uploaded) return { type: 'uploaded', url: uploaded.url }
+    const ytId = STAGE_1_VIDEO_IDS[name]
+    return ytId ? { type: 'youtube', url: youtubeEmbedUrl(ytId) } : null
+  }
 
   const unit = defaultUnit || 'kg'
   const doneCount = Object.values(drafts).filter((d) => d.done).length
@@ -269,21 +286,23 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
       {doneCount > 0 && <span className="roadmap-session-counter">{doneCount} of {exercises.length} logged</span>}
       {exercises.map((ex) => {
         const entry = drafts[ex.name]
+        const video = videoFor(ex.name)
         return (
           <div className="quick-log-row" key={ex.name}>
             <ExerciseIcon name={ex.name} />
             <div className="quick-log-info">
               <div className="quick-log-name">{ex.name}</div>
               <div className="quick-log-target">{ex.target}</div>
-              <a
-                className="text-link-btn"
-                style={{ padding: 0, marginTop: 2 }}
-                href={youtubeHowToUrl(ex.name)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                ▶ How to do this
-              </a>
+              {video && (
+                <button
+                  type="button"
+                  className="text-link-btn"
+                  style={{ padding: 0, marginTop: 2 }}
+                  onClick={() => setVideoModalFor(ex.name)}
+                >
+                  ▶ How to do this
+                </button>
+              )}
             </div>
             <input
               className="quick-log-input"
@@ -322,6 +341,41 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
       >
         {saving ? 'Saving…' : `Finish session${doneCount ? ` (${doneCount})` : ''}`}
       </button>
+
+      {videoModalFor && (
+        <div className="timer-modal-overlay" onClick={() => setVideoModalFor(null)}>
+          <div className="roadmap-video-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="timer-modal-header">
+              <p style={{ fontWeight: 700, margin: 0 }}>{videoModalFor}</p>
+              <button className="btn btn-ghost" onClick={() => setVideoModalFor(null)} aria-label="Close">✕</button>
+            </div>
+            {(() => {
+              const video = videoFor(videoModalFor)
+              if (!video) return null
+              return video.type === 'uploaded' ? (
+                <video
+                  controls
+                  autoPlay
+                  preload="metadata"
+                  src={video.url}
+                  style={{ width: '100%', borderRadius: 8, background: '#000' }}
+                />
+              ) : (
+                <iframe
+                  width="100%"
+                  height="220"
+                  src={video.url}
+                  title={`${videoModalFor} how-to`}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{ borderRadius: 8, display: 'block' }}
+                />
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </>
   )
 }
