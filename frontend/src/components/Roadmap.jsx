@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  BEGINNER_STAGES, STAGE_EXIT_DAYS, GRADUATION_MIN_WEEKS,
+  BEGINNER_STAGES, STAGE_EXIT_DAYS, GRADUATION_MIN_WEEKS, GRADUATION_REWARD_AMOUNT,
   nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate, stage1Prescription,
 } from '../lib/roadmap'
 import { advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout, debugSetRoadmapProgress } from '../lib/db'
@@ -8,6 +8,7 @@ import { pictogramFor, groupFor, GROUP_COLOR } from '../lib/exerciseLibrary'
 import { PICTOGRAMS } from '../lib/pictograms'
 import { todayISO } from '../lib/format'
 import { playCheckSound, playCelebrationSound } from '../lib/sound'
+import LearningVideos from './LearningVideos'
 import { Tally } from './TabBar'
 
 // Reuses the app's real pictogram set (same one ExercisePicker uses) so
@@ -74,6 +75,46 @@ function Confetti() {
           style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, background: p.color, animationDelay: `${p.delay}s` }}
         />
       ))}
+    </div>
+  )
+}
+
+// A short, always-available explanation of the whole journey - what each
+// stage actually requires and what's waiting at the end. Collapsed by
+// default so it doesn't compete with the stage card for a returning
+// user, but easy to re-open any time.
+function JourneyExplainer() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="card">
+      <button
+        type="button"
+        className="text-link-btn"
+        style={{ fontWeight: 600, fontSize: 14 }}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? '▾' : '▸'} How does Beginner → Intermediate work?
+      </button>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <p className="small" style={{ margin: '0 0 8px' }}>
+            <strong>Stage 1 — Learn the Lifts.</strong> Log {STAGE_EXIT_DAYS[1]} different training days,
+            focused on getting the movements right - weight doesn't matter yet.
+          </p>
+          <p className="small" style={{ margin: '0 0 8px' }}>
+            <strong>Stage 2 — Build the Base.</strong> Keep training consistently until you've logged{' '}
+            {STAGE_EXIT_DAYS[2]} days total - roughly a month at 3x/week.
+          </p>
+          <p className="small" style={{ margin: '0 0 8px' }}>
+            <strong>Stage 3 — Ready to Graduate.</strong> After at least {GRADUATION_MIN_WEEKS} weeks, we check
+            whether your main lifts have stopped improving session to session. Once they've levelled off,
+            that's the real signal your body's adapted and you're ready for Intermediate.
+          </p>
+          <p className="small" style={{ margin: 0 }}>
+            🎉 <strong>Graduate and you earn ₹{GRADUATION_REWARD_AMOUNT}</strong> as a thank-you for sticking with it.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -303,10 +344,10 @@ function QuickLogSession({ user, exercises, defaultUnit, onLogged }) {
 // content yet, so they stay overview-only for now - not an oversight,
 // just not built.
 export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapProgress, onProgressChange, onLogged }) {
-  const days = useMemo(() => distinctLoggedDays(workouts), [workouts])
+  const days = useMemo(() => distinctLoggedDays(workouts, roadmapProgress?.started_at), [workouts, roadmapProgress])
   const stage1Exercises = useMemo(() => stage1Prescription(profile?.goal_priority ?? []), [profile])
   const computedStage = useMemo(
-    () => (roadmapProgress ? nextStage(roadmapProgress.stage, workouts) : null),
+    () => (roadmapProgress ? nextStage(roadmapProgress.stage, workouts, roadmapProgress.started_at) : null),
     [roadmapProgress, workouts],
   )
   const readyToGraduate = useMemo(
@@ -355,6 +396,17 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
             isn't built yet, so for now just keep logging as normal; we'll let you know the moment it's ready.
           </p>
         </div>
+        {roadmapProgress.reward_status === 'earned' && (
+          <div className="card" style={{ textAlign: 'center' }}>
+            <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>
+              💰 You earned ₹{roadmapProgress.reward_amount}!
+            </p>
+            <p className="small" style={{ marginTop: 4 }}>
+              Nice work finishing the Beginner roadmap. Payout details coming soon.
+            </p>
+          </div>
+        )}
+        <LearningVideos user={user} />
         {user.email === DEBUG_ACCOUNT_EMAIL && <DebugPanel user={user} onProgressChange={onProgressChange} />}
       </div>
     )
@@ -365,6 +417,8 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
 
   return (
     <div>
+      <JourneyExplainer />
+
       <div className="card">
         <p className="small" style={{ margin: 0 }}>Stage {stage} of 3</p>
         <p style={{ fontWeight: 700, fontSize: 18, margin: '4px 0 0' }}>{current.label}</p>
@@ -417,6 +471,8 @@ export default function Roadmap({ user, workouts, profile, defaultUnit, roadmapP
           )
         })}
       </div>
+
+      <LearningVideos user={user} />
 
       {user.email === DEBUG_ACCOUNT_EMAIL && <DebugPanel user={user} onProgressChange={onProgressChange} />}
     </div>

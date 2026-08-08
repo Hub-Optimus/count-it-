@@ -5,6 +5,7 @@ import { todayISO } from './lib/format'
 import { peekDraft } from './lib/draft'
 import TabBar, { Tally } from './components/TabBar'
 import Auth from './components/Auth'
+import ResetPassword from './components/ResetPassword'
 import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
 import SidePanel from './components/SidePanel'
@@ -34,11 +35,34 @@ function currentBundleSrc() {
 
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still checking
+  // Checked synchronously from the raw URL on first render - NOT from the
+  // PASSWORD_RECOVERY auth event alone. Supabase's client parses a recovery
+  // link's token as soon as it's created (before this component even
+  // mounts), so a listener attached inside useEffect can miss that event
+  // entirely. Reading the URL directly here can't miss it.
+  const [passwordRecovery, setPasswordRecovery] = useState(() =>
+    typeof window !== 'undefined' && window.location.hash.includes('type=recovery')
+  )
+  // Supabase redirects here with #error=... when a reset/confirmation link
+  // is invalid or already used (single-use - clicking it twice, or an
+  // email provider "previewing" the link before the person does, both
+  // burn it). Without this, the app just silently falls through to the
+  // normal sign-in screen with no explanation.
+  const [authError, setAuthError] = useState(() => {
+    if (typeof window === 'undefined' || !window.location.hash.includes('error=')) return null
+    const params = new URLSearchParams(window.location.hash.slice(1))
+    return (params.get('error_description') || 'That link is invalid or has expired.').replace(/\+/g, ' ')
+  })
 
   useEffect(() => {
     if (!configured) return
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      // Kept as a second detection path (covers any timing where the URL
+      // hash check above runs too early to see it yet).
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      setSession(s)
+    })
     return () => subscription.unsubscribe()
   }, [])
 
@@ -53,6 +77,33 @@ export default function App() {
           Supabase isn't connected yet. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
           (in .env locally, or in Vercel project settings), then redeploy. The README has the full steps.
         </p>
+      </div>
+    )
+  }
+
+  // Checked before the session splash below - we already know from the URL
+  // alone that this is a recovery link, no reason to wait on anything.
+  if (passwordRecovery) {
+    return <ResetPassword onDone={() => setPasswordRecovery(false)} />
+  }
+
+  if (authError) {
+    return (
+      <div className="auth-wrap">
+        <div className="auth-logo">
+          <Tally size={40} />
+          <div className="auth-title">Count It</div>
+        </div>
+        <p className="error">{authError}</p>
+        <button
+          className="btn btn-primary btn-block"
+          onClick={() => {
+            window.history.replaceState(null, '', window.location.pathname)
+            setAuthError(null)
+          }}
+        >
+          Back to sign in
+        </button>
       </div>
     )
   }

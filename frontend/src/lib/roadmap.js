@@ -79,8 +79,17 @@ const STAGE_2_EXIT_DAYS = 12  // roughly a month at 3x/week - the real grind
 
 export const STAGE_EXIT_DAYS = { 1: STAGE_1_EXIT_DAYS, 2: STAGE_2_EXIT_DAYS }
 
-export function distinctLoggedDays(workouts) {
-  return new Set(workouts.map((w) => w.date)).size
+export function distinctLoggedDays(workouts, sinceIso) {
+  // Date-level (not time-of-day) comparison: this is deliberate for real
+  // users - their started_at is set once at roadmap init and never
+  // touched again, so this always lines up with actual calendar days.
+  // It only gets fuzzy for the debug tools specifically, when someone
+  // resets and re-logs within the same day - a workout logged earlier
+  // that same day still counts, since dates don't carry a time. That's
+  // a debug-only quirk, not something a real user would ever hit.
+  const since = sinceIso ? sinceIso.slice(0, 10) : null
+  const relevant = since ? workouts.filter((w) => w.date >= since) : workouts
+  return new Set(relevant.map((w) => w.date)).size
 }
 
 export function weeksSince(dateIso) {
@@ -88,9 +97,13 @@ export function weeksSince(dateIso) {
 }
 
 // Returns the stage the user should be on given their logged history.
-// Never moves a user backward - only forward or unchanged.
-export function nextStage(currentStage, workouts) {
-  const days = distinctLoggedDays(workouts)
+// Never moves a user backward - only forward or unchanged. Counts days
+// since the current stage's started_at, not all-time - otherwise once
+// someone has enough total history, manually resetting the stage (debug
+// tools, or a future real "restart" action) gets immediately overridden
+// back up by this same function on the very next render.
+export function nextStage(currentStage, workouts, startedAtIso) {
+  const days = distinctLoggedDays(workouts, startedAtIso)
   if (currentStage === 1 && days >= STAGE_1_EXIT_DAYS) return 2
   if (currentStage === 2 && days >= STAGE_2_EXIT_DAYS) return 3
   return currentStage
@@ -105,6 +118,7 @@ export function nextStage(currentStage, workouts) {
 // inventing a second progress metric.
 
 export const GRADUATION_MIN_WEEKS = 8 // duration floor - agreed 2026-08-04
+export const GRADUATION_REWARD_AMOUNT = 50 // matches backend GRADUATION_REWARD_AMOUNT - keep in sync
 const PLATEAU_WINDOW_SESSIONS = 4
 const MIN_SESSIONS_TO_JUDGE = 4
 
