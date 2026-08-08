@@ -237,13 +237,13 @@ export async function fetchVideos() {
   return api.get('/api/videos')
 }
 
-export async function createVideo({ title, description, storagePath, stage }) {
+export async function createVideo({ title, description, storagePath, stage, exerciseName }) {
   const mock = testMock()
   if (mock) {
-    window.__TEST_LAST_SAVE__ = { title, description, storagePath, stage }
+    window.__TEST_LAST_SAVE__ = { title, description, storagePath, stage, exerciseName }
     return
   }
-  await api.post('/api/videos', { title, description, storagePath, stage })
+  await api.post('/api/videos', { title, description, storagePath, stage, exerciseName })
 }
 
 export async function deleteVideo(id) {

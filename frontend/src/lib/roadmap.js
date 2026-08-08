@@ -78,6 +78,24 @@ export function youtubeHowToUrl(exerciseName) {
   return `https://www.youtube.com/results?search_query=${query}`
 }
 
+// Curated, embeddable videos for the 5 fixed Stage 1 exercises
+// specifically - picked once, good enough to trust without a search
+// each time. Preview these yourself once; swap the ID if any don't
+// look right. Overridden automatically per-exercise the moment an
+// admin-uploaded video with a matching exerciseName exists (see
+// LearningVideos.jsx / db.js fetchVideos).
+export const STAGE_1_VIDEO_IDS = {
+  'Dumbbell Squat': 'ZXwvmRSRRxY',
+  'Dumbbell Romanian Deadlift': 'ndfZi5fDaVM',
+  'Push-up': 'BeC7ewqJsjI',
+  'Dumbbell Bent Over Row': 'c-gt-zzoa_A',
+  'Dead Bug': '3eqodmkpkfA',
+}
+
+export function youtubeEmbedUrl(videoId) {
+  return `https://www.youtube.com/embed/${videoId}`
+}
+
 // ---- Stage 1 -> 2 and Stage 2 -> 3: session-count thresholds ----
 //
 // Distinct logged days, not total sets - "did you show up" is the
