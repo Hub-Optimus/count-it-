@@ -69,6 +69,15 @@ export function stage1Prescription(goalPriority) {
   })
 }
 
+// A search link, not a curated single video - the exercise library has
+// 1000+ entries, so hand-picking one video per exercise isn't
+// maintainable. This always opens something relevant instead of a dead
+// link or an empty result for anything obscure.
+export function youtubeHowToUrl(exerciseName) {
+  const query = encodeURIComponent(`${exerciseName} proper form tutorial`)
+  return `https://www.youtube.com/results?search_query=${query}`
+}
+
 // ---- Stage 1 -> 2 and Stage 2 -> 3: session-count thresholds ----
 //
 // Distinct logged days, not total sets - "did you show up" is the
@@ -78,6 +87,28 @@ const STAGE_1_EXIT_DAYS = 3   // enough to have tried the basics at least a few 
 const STAGE_2_EXIT_DAYS = 12  // roughly a month at 3x/week - the real grind
 
 export const STAGE_EXIT_DAYS = { 1: STAGE_1_EXIT_DAYS, 2: STAGE_2_EXIT_DAYS }
+
+// Small checkpoints inside Stage 2's 12-day grind - planned back on
+// 2026-08-03 to fight the weeks 1-12 dropout window, never actually
+// built until now. Pure UI sugar: doesn't change when someone advances
+// to Stage 3, just gives them something to notice along the way.
+export const STAGE_2_MILESTONES = [3, 6, 9]
+
+export const STAGE_2_MILESTONE_COPY = {
+  3: { emoji: '🔥', message: '3 days in — the habit is forming.' },
+  6: { emoji: '💪', message: 'Halfway there — 6 days logged.' },
+  9: { emoji: '⚡', message: 'Almost there — 9 days down, 3 to go.' },
+}
+
+// Returns the milestone day that should be celebrated right now, or null
+// if none is pending. Only ever returns one at a time, largest first -
+// if someone logs several sessions in a row before opening the app,
+// they'll see the milestones one at a time as they dismiss each.
+export function nextPendingStage2Milestone(daysInStage2, seenMilestones = []) {
+  const seen = new Set(seenMilestones)
+  const pending = STAGE_2_MILESTONES.filter((day) => daysInStage2 >= day && !seen.has(day))
+  return pending.length ? Math.max(...pending) : null
+}
 
 export function distinctLoggedDays(workouts, sinceIso) {
   // Date-level (not time-of-day) comparison: this is deliberate for real
