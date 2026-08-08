@@ -155,6 +155,17 @@ export async function debugSetRoadmapProgress(userId, { stage, startedAt, gradua
   return api.put('/api/roadmap/debug', { stage, startedAt, graduatedAt })
 }
 
+// Marks one Stage 2 milestone (day 3/6/9) as celebrated, so it never
+// shows twice. Returns the full updated seen-list.
+export async function markStage2MilestoneSeen(userId, day) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_MILESTONE_SEEN__ = day
+    return { stage2_milestones_seen: [day] }
+  }
+  return api.put('/api/roadmap/milestone', { day })
+}
+
 // ---- body weight log ----
 
 export async function fetchBodyMetrics(userId) {
