@@ -30,6 +30,10 @@ SUPABASE_ANON_KEY = os.environ["SUPABASE_ANON_KEY"]
 # with an asymmetric key (ES256/RS256) instead; those are verified via
 # the public JWKS endpoint below, no secret needed.
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET")
+# Only this email can upload/delete learning videos. Same account already
+# gated for the roadmap debug panel on the frontend - reusing it here.
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "prakashkoulagi.official@gmail.com")
+GRADUATION_REWARD_AMOUNT = 50
 
 _jwks_client = PyJWKClient(f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json")
 
@@ -71,8 +75,9 @@ def today_iso() -> str:
 
 
 class AuthCtx:
-    def __init__(self, user_id: str, client: Client):
+    def __init__(self, user_id: str, email: str | None, client: Client):
         self.user_id = user_id
+        self.email = email
         self.client = client
 
 
@@ -93,7 +98,7 @@ def get_auth(authorization: str = Header(default=None)) -> AuthCtx:
     # it always has, so every existing RLS policy applies unchanged.
     client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
     client.postgrest.auth(token)
-    return AuthCtx(user_id=user_id, client=client)
+    return AuthCtx(user_id=user_id, email=payload.get("email"), client=client)
 
 
 @app.exception_handler(APIError)
@@ -319,7 +324,7 @@ def init_roadmap(ctx: AuthCtx = Depends(get_auth)):
 def fetch_roadmap(ctx: AuthCtx = Depends(get_auth)):
     res = (
         ctx.client.table("roadmap_progress")
-        .select("stage, started_at, graduated_at")
+        .select("stage, started_at, graduated_at, reward_amount, reward_status")
         .eq("user_id", ctx.user_id)
         .maybe_single()
         .execute()
@@ -337,8 +342,16 @@ def advance_roadmap_stage(body: dict = Body(...), ctx: AuthCtx = Depends(get_aut
 
 @app.post("/api/roadmap/graduate")
 def mark_roadmap_graduated(ctx: AuthCtx = Depends(get_auth)):
+    # Reward is a status flag only - "earned" here means the milestone is
+    # met, not that money has moved. Actual payout is a separate feature
+    # (needs a payment gateway) not built yet.
     ctx.client.table("roadmap_progress").update(
-        {"graduated_at": now_iso(), "updated_at": now_iso()}
+        {
+            "graduated_at": now_iso(),
+            "reward_amount": GRADUATION_REWARD_AMOUNT,
+            "reward_status": "earned",
+            "updated_at": now_iso(),
+        }
     ).eq("user_id", ctx.user_id).execute()
     return {"ok": True}
 
@@ -355,6 +368,15 @@ def debug_set_roadmap_progress(body: dict = Body(...), ctx: AuthCtx = Depends(ge
         payload["started_at"] = body["startedAt"]
     if "graduatedAt" in body:
         payload["graduated_at"] = body["graduatedAt"]
+        # Debug-resetting graduation should also clear the reward flag,
+        # so repeated test runs of the full journey don't leave a stale
+        # "earned" status lying around from a previous test pass.
+        if body["graduatedAt"] is None:
+            payload["reward_amount"] = None
+            payload["reward_status"] = None
+        else:
+            payload["reward_amount"] = GRADUATION_REWARD_AMOUNT
+            payload["reward_status"] = "earned"
     res = (
         ctx.client.table("roadmap_progress")
         .update(payload)
@@ -489,4 +511,60 @@ def save_template(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
 @app.delete("/api/templates/{template_id}")
 def delete_template(template_id: str, ctx: AuthCtx = Depends(get_auth)):
     ctx.client.table("templates").delete().eq("id", template_id).execute()
+    return {"ok": True}
+
+
+# --------------------------------------------------------- learning videos
+
+def video_public_url(storage_path: str) -> str:
+    return f"{SUPABASE_URL}/storage/v1/object/public/learning-videos/{storage_path}"
+
+
+@app.get("/api/videos")
+def fetch_videos(ctx: AuthCtx = Depends(get_auth)):
+    res = (
+        ctx.client.table("learning_videos")
+        .select("id, title, description, storage_path, stage, created_at")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return [
+        {
+            "id": v["id"],
+            "title": v["title"],
+            "description": v["description"],
+            "stage": v["stage"],
+            "url": video_public_url(v["storage_path"]),
+        }
+        for v in (res.data or [])
+    ]
+
+
+@app.post("/api/videos")
+def create_video(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
+    # File bytes are uploaded straight from the browser to Supabase
+    # Storage (protected by the storage RLS policy for this bucket) -
+    # this endpoint only records the metadata row once that succeeds.
+    if ctx.email != ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Only the app owner can upload videos.")
+    res = (
+        ctx.client.table("learning_videos")
+        .insert(
+            {
+                "title": body.get("title"),
+                "description": body.get("description") or None,
+                "storage_path": body.get("storagePath"),
+                "stage": body.get("stage"),
+            }
+        )
+        .execute()
+    )
+    return {"id": res.data[0]["id"]}
+
+
+@app.delete("/api/videos/{video_id}")
+def delete_video(video_id: str, ctx: AuthCtx = Depends(get_auth)):
+    if ctx.email != ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Only the app owner can delete videos.")
+    ctx.client.table("learning_videos").delete().eq("id", video_id).execute()
     return {"ok": True}
