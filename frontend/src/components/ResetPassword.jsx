@@ -26,12 +26,20 @@ export default function ResetPassword({ onDone }) {
     }
     setBusy(true)
     const { error } = await supabase.auth.updateUser({ password })
-    setBusy(false)
     if (error) {
+      setBusy(false)
       setError(error.message || 'Something went wrong. Try again.')
       return
     }
     setDone(true)
+    // Scrub the token out of the URL so refreshing this tab can't
+    // re-trigger the recovery flow or leave it sitting in history.
+    window.history.replaceState(null, '', window.location.pathname)
+    // Sign out of the recovery session and send them back to the normal
+    // sign-in screen, so they confirm the new password actually works
+    // rather than silently staying logged in.
+    await supabase.auth.signOut()
+    setTimeout(onDone, 1500)
   }
 
   return (
@@ -43,8 +51,7 @@ export default function ResetPassword({ onDone }) {
 
       {done ? (
         <>
-          <p className="auth-tag">Password updated.</p>
-          <button className="btn btn-primary btn-block" onClick={onDone}>Continue</button>
+          <p className="auth-tag">Password updated. Redirecting to sign in…</p>
         </>
       ) : (
         <>

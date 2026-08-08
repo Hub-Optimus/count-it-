@@ -35,15 +35,21 @@ function currentBundleSrc() {
 
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still checking
-  const [passwordRecovery, setPasswordRecovery] = useState(false)
+  // Checked synchronously from the raw URL on first render - NOT from the
+  // PASSWORD_RECOVERY auth event alone. Supabase's client parses a recovery
+  // link's token as soon as it's created (before this component even
+  // mounts), so a listener attached inside useEffect can miss that event
+  // entirely. Reading the URL directly here can't miss it.
+  const [passwordRecovery, setPasswordRecovery] = useState(() =>
+    typeof window !== 'undefined' && window.location.hash.includes('type=recovery')
+  )
 
   useEffect(() => {
     if (!configured) return
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-      // Fires when someone lands here via a "reset your password" email
-      // link - Supabase has already turned that link into a real session
-      // by this point, so all that's left is asking for a new password.
+      // Kept as a second detection path (covers any timing where the URL
+      // hash check above runs too early to see it yet).
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       setSession(s)
     })
@@ -65,16 +71,18 @@ export default function App() {
     )
   }
 
+  // Checked before the session splash below - we already know from the URL
+  // alone that this is a recovery link, no reason to wait on anything.
+  if (passwordRecovery) {
+    return <ResetPassword onDone={() => setPasswordRecovery(false)} />
+  }
+
   if (session === undefined) {
     return (
       <div className="splash">
         <Tally size={52} />
       </div>
     )
-  }
-
-  if (passwordRecovery) {
-    return <ResetPassword onDone={() => setPasswordRecovery(false)} />
   }
 
   if (!session) return <Auth />
