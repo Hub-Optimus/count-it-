@@ -249,3 +249,35 @@ export async function createVideo({ title, description, storagePath, stage, exer
 export async function deleteVideo(id) {
   await api.del(`/api/videos/${id}`)
 }
+
+// ---- roles & gyms (Individual / Owner / Trainer) ----
+
+export async function saveRole({ role, ownerName, gymName, contact, gymCode }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { role, ownerName, gymName, contact, gymCode }
+    return { role, owner_gym_code: 'TEST99' }
+  }
+  return api.post('/api/profile/role', { role, ownerName, gymName, contact, gymCode })
+}
+
+export async function fetchGymMembers() {
+  const mock = testMock()
+  if (mock) return mock.gymMembers ?? { gymCode: '', gymName: '', trainers: [], members: [] }
+  return api.get('/api/gym/members')
+}
+
+export async function assignTrainer(memberUserId, trainerUserId) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { memberUserId, trainerUserId }
+    return
+  }
+  await api.put('/api/gym/assign-trainer', { memberUserId, trainerUserId })
+}
+
+export async function fetchTrainerClients() {
+  const mock = testMock()
+  if (mock) return mock.trainerClients ?? []
+  return api.get('/api/trainer/clients')
+}

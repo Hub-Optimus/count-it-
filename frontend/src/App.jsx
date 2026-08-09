@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, Suspense, lazy } from 'react'
 import { supabase, configured } from './lib/supabase'
-import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates, fetchBodyMetrics, fetchRoadmapProgress } from './lib/db'
+import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates, fetchBodyMetrics, fetchRoadmapProgress, saveRole } from './lib/db'
 import { todayISO } from './lib/format'
 import { peekDraft } from './lib/draft'
 import TabBar, { Tally } from './components/TabBar'
@@ -10,6 +10,8 @@ import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
 import SidePanel from './components/SidePanel'
 import Onboarding from './components/Onboarding'
+import OwnerDashboard from './components/OwnerDashboard'
+import TrainerDashboard from './components/TrainerDashboard'
 
 // Lazy: these are only needed once someone actually navigates away from
 // the primary logging tab - no reason to make everyone download them on
@@ -66,6 +68,26 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Owner/Trainer signups that required email confirmation couldn't call
+  // saveRole() at signup time (no session yet) - Auth.jsx stashed the
+  // role/gym fields in localStorage instead. Apply them the moment a
+  // session actually appears, before Main ever fetches the profile, so
+  // it never briefly renders as a plain "individual" account.
+  const [applyingPendingRole, setApplyingPendingRole] = useState(false)
+  useEffect(() => {
+    if (!session) return
+    const key = `countit_pending_role:${session.user.email.toLowerCase()}`
+    const pending = localStorage.getItem(key)
+    if (!pending) return
+    setApplyingPendingRole(true)
+    saveRole(JSON.parse(pending))
+      .catch(() => {})
+      .finally(() => {
+        localStorage.removeItem(key)
+        setApplyingPendingRole(false)
+      })
+  }, [session])
+
   if (!configured) {
     return (
       <div className="auth-wrap">
@@ -117,6 +139,14 @@ export default function App() {
   }
 
   if (!session) return <Auth />
+
+  if (applyingPendingRole) {
+    return (
+      <div className="splash">
+        <Tally size={52} />
+      </div>
+    )
+  }
 
   return <Main user={session.user} />
 }
@@ -309,6 +339,15 @@ export function Main({ user }) {
         <Tally size={52} />
       </div>
     )
+  }
+
+  // Owner/Trainer accounts skip the individual onboarding wizard and
+  // workout-logging UI entirely - they get their own dashboard instead.
+  if (profile?.role === 'owner') {
+    return <OwnerDashboard user={user} profile={profile} />
+  }
+  if (profile?.role === 'trainer') {
+    return <TrainerDashboard user={user} profile={profile} />
   }
 
   // profile === null: brand-new user, no row yet. profile with no
