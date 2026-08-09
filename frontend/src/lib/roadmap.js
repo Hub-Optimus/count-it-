@@ -34,11 +34,11 @@ export const BEGINNER_STAGES = [
 // on a name that doesn't exist.
 
 export const STAGE_1_EXERCISES = [
-  { pattern: 'Squat', name: 'Dumbbell Squat', line: "First up — Dumbbell Squat. Sit back like you're reaching for a chair." },
-  { pattern: 'Hinge', name: 'Dumbbell Romanian Deadlift', line: 'Romanian Deadlift — hinge at the hips, keep that back flat.' },
-  { pattern: 'Push', name: 'Push-up', line: 'Push-up time — squeeze your core the whole way down.' },
-  { pattern: 'Pull', name: 'Dumbbell Bent Over Row', line: 'Bent Over Row — pull with your back, not just your arms.' },
-  { pattern: 'Core', name: 'Dead Bug', line: 'Last one — Dead Bug. Slow and controlled beats fast and sloppy.' },
+  { pattern: 'Squat', name: 'Dumbbell Squat', equipment: 'Dumbbell', line: "First up — Dumbbell Squat. Sit back like you're reaching for a chair." },
+  { pattern: 'Hinge', name: 'Dumbbell Romanian Deadlift', equipment: 'Dumbbell', line: 'Romanian Deadlift — hinge at the hips, keep that back flat.' },
+  { pattern: 'Push', name: 'Push-up', equipment: 'Bodyweight', line: 'Push-up time — squeeze your core the whole way down.' },
+  { pattern: 'Pull', name: 'Dumbbell Bent Over Row', equipment: 'Dumbbell', line: 'Bent Over Row — pull with your back, not just your arms.' },
+  { pattern: 'Core', name: 'Dead Bug', equipment: 'Bodyweight', line: 'Last one — Dead Bug. Slow and controlled beats fast and sloppy.' },
 ]
 
 const GOAL_REP_TARGETS = {
@@ -79,12 +79,12 @@ export function stage1Prescription(goalPriority) {
 // versions), same 5 movement patterns plus a dedicated overhead press so
 // the set covers push (horizontal + vertical), pull, hinge, squat, core.
 export const STAGE_2_EXERCISES = [
-  { pattern: 'Squat', name: 'Dumbbell Goblet Squat', line: 'Goblet Squat — hold it close to your chest, elbows inside your knees at the bottom.' },
-  { pattern: 'Hinge', name: 'Dumbbell Single Leg Deadlift', line: 'Single Leg Deadlift — soft bend in the standing knee, hinge don\'t squat.' },
-  { pattern: 'Push', name: 'Dumbbell Bench Press', line: 'Bench Press — dumbbells over your chest, elbows at about 45°.' },
-  { pattern: 'Push', name: 'Dumbbell Standing Overhead Press', line: 'Overhead Press — brace your core so your lower back doesn\'t arch.' },
-  { pattern: 'Pull', name: 'Dumbbell One Arm Bent-over Row', line: 'One Arm Row — free hand braced, pull with your elbow, not your hand.' },
-  { pattern: 'Core', name: 'Russian Twist', line: 'Russian Twist — rotate from your ribs, not just your arms.' },
+  { pattern: 'Squat', name: 'Dumbbell Goblet Squat', equipment: 'Dumbbell', line: 'Goblet Squat — hold it close to your chest, elbows inside your knees at the bottom.' },
+  { pattern: 'Hinge', name: 'Dumbbell Single Leg Deadlift', equipment: 'Dumbbell', line: 'Single Leg Deadlift — soft bend in the standing knee, hinge don\'t squat.' },
+  { pattern: 'Push', name: 'Dumbbell Bench Press', equipment: 'Dumbbell', line: 'Bench Press — dumbbells over your chest, elbows at about 45°.' },
+  { pattern: 'Push', name: 'Dumbbell Standing Overhead Press', equipment: 'Dumbbell', line: 'Overhead Press — brace your core so your lower back doesn\'t arch.' },
+  { pattern: 'Pull', name: 'Dumbbell One Arm Bent-over Row', equipment: 'Dumbbell', line: 'One Arm Row — free hand braced, pull with your elbow, not your hand.' },
+  { pattern: 'Core', name: 'Russian Twist', equipment: 'Bodyweight', line: 'Russian Twist — rotate from your ribs, not just your arms.' },
 ]
 
 export function stage2Prescription(goalPriority) {

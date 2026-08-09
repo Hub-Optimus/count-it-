@@ -329,6 +329,10 @@ function QuickLogSession({ user, exercises: fixedExercises, defaultUnit, onLogge
               <div className="quick-log-info">
                 <div className="quick-log-name">{ex.name}</div>
                 <div className="quick-log-target">{ex.target}</div>
+                <div className="quick-log-meta">
+                  {ex.equipment && <span>Equipment: {ex.equipment}</span>}
+                  {groupFor(ex.name) && <span>Muscle: {groupFor(ex.name)}</span>}
+                </div>
                 {video && (
                   <button
                     type="button"
