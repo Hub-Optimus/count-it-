@@ -328,9 +328,9 @@ button { cursor: pointer; }
 
 .quick-log-thumb {
   flex: none;
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
   object-fit: cover;
   background: var(--card-2);
 }
@@ -523,15 +523,26 @@ button { cursor: pointer; }
 
 .roadmap-stage.locked .roadmap-stage-label { color: var(--ink-faint); }
 
-.quick-log-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.quick-log-card {
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
 
-.quick-log-row:last-of-type { border-bottom: none; }
+.quick-log-card:last-of-type { border-bottom: none; }
+
+.quick-log-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-log-bottom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding-left: 74px; /* lines up under the name, past the thumbnail */
+}
 
 .quick-log-info { flex: 1; min-width: 0; }
 

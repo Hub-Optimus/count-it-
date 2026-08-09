@@ -320,48 +320,52 @@ function QuickLogSession({ user, exercises: fixedExercises, defaultUnit, onLogge
         const entry = drafts[ex.name]
         const video = videoFor(ex.name)
         return (
-          <div className="quick-log-row" key={ex.name}>
-            <ExercisePreview name={ex.name} />
-            <div className="quick-log-info">
-              <div className="quick-log-name">{ex.name}</div>
-              <div className="quick-log-target">{ex.target}</div>
-              {video && (
-                <button
-                  type="button"
-                  className="text-link-btn"
-                  style={{ padding: 0, marginTop: 2 }}
-                  onClick={() => setVideoModalFor(ex.name)}
-                >
-                  ▶ How to do this
-                </button>
-              )}
+          <div className="quick-log-card" key={ex.name}>
+            <div className="quick-log-top">
+              <ExercisePreview name={ex.name} />
+              <div className="quick-log-info">
+                <div className="quick-log-name">{ex.name}</div>
+                <div className="quick-log-target">{ex.target}</div>
+                {video && (
+                  <button
+                    type="button"
+                    className="text-link-btn"
+                    style={{ padding: 0, marginTop: 2 }}
+                    onClick={() => setVideoModalFor(ex.name)}
+                  >
+                    ▶ How to do this
+                  </button>
+                )}
+              </div>
             </div>
-            <input
-              className="quick-log-input"
-              placeholder={unit}
-              inputMode="decimal"
-              value={entry.weight}
-              disabled={entry.done}
-              onChange={(e) => updateDraft(ex.name, 'weight', e.target.value)}
-              aria-label={`${ex.name} weight`}
-            />
-            <input
-              className="quick-log-input"
-              placeholder="reps"
-              inputMode="numeric"
-              value={entry.reps}
-              disabled={entry.done}
-              onChange={(e) => updateDraft(ex.name, 'reps', e.target.value)}
-              aria-label={`${ex.name} reps`}
-            />
-            <button
-              type="button"
-              className={`quick-log-check ${entry.done ? 'done' : ''}`}
-              onClick={() => toggleDone(ex.name)}
-              aria-label={entry.done ? `Mark ${ex.name} not done` : `Mark ${ex.name} done`}
-            >
-              {entry.done ? '✓' : ''}
-            </button>
+            <div className="quick-log-bottom">
+              <input
+                className="quick-log-input"
+                placeholder={unit}
+                inputMode="decimal"
+                value={entry.weight}
+                disabled={entry.done}
+                onChange={(e) => updateDraft(ex.name, 'weight', e.target.value)}
+                aria-label={`${ex.name} weight`}
+              />
+              <input
+                className="quick-log-input"
+                placeholder="reps"
+                inputMode="numeric"
+                value={entry.reps}
+                disabled={entry.done}
+                onChange={(e) => updateDraft(ex.name, 'reps', e.target.value)}
+                aria-label={`${ex.name} reps`}
+              />
+              <button
+                type="button"
+                className={`quick-log-check ${entry.done ? 'done' : ''}`}
+                onClick={() => toggleDone(ex.name)}
+                aria-label={entry.done ? `Mark ${ex.name} not done` : `Mark ${ex.name} done`}
+              >
+                {entry.done ? '✓' : ''}
+              </button>
+            </div>
           </div>
         )
       })}
