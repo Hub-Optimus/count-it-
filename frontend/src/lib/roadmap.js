@@ -108,6 +108,25 @@ export function youtubeHowToUrl(exerciseName) {
 // LearningVideos.jsx / db.js fetchVideos). Exercises added via the
 // picker (outside these two fixed lists) simply get no video link -
 // there's no curated ID to fall back to for arbitrary library entries.
+// Real photos already sitting in public/exercise-images/, matched by
+// name where one exists - a better preview than a video thumbnail when
+// available. Only 4 of the fixed list happen to have one; everything
+// else falls back to the YouTube thumbnail, then the plain icon.
+// NOTE: these are real gym photos, not the illustrated/muscle-highlight
+// style some apps use - that style comes from a licensed exercise
+// database (e.g. ExerciseDB), which isn't something in place here.
+export const LOCAL_EXERCISE_IMAGES = {
+  'Dumbbell Goblet Squat': 'goblet-squat.jpg',
+  'Push-up': 'push-up.jpg',
+  'Dumbbell Romanian Deadlift': 'romanian-deadlift.jpg',
+  'Russian Twist': 'russian-twist.jpg',
+}
+
+export function localExerciseImageUrl(exerciseName) {
+  const file = LOCAL_EXERCISE_IMAGES[exerciseName]
+  return file ? `/exercise-images/${file}` : null
+}
+
 export const EXERCISE_VIDEO_IDS = {
   'Dumbbell Squat': 'ZXwvmRSRRxY',
   'Dumbbell Romanian Deadlift': 'ndfZi5fDaVM',

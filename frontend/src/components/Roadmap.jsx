@@ -4,6 +4,7 @@ import {
   STAGE_2_MILESTONES, STAGE_2_MILESTONE_COPY, nextPendingStage2Milestone,
   nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate,
   stage1Prescription, stage2Prescription, EXERCISE_VIDEO_IDS, youtubeEmbedUrl, youtubeThumbnailUrl,
+  localExerciseImageUrl,
 } from '../lib/roadmap'
 import {
   advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout, debugSetRoadmapProgress,
@@ -38,11 +39,13 @@ function ExerciseIcon({ name }) {
 // to the plain pictogram icon for anything without one (exercises added
 // via the picker, or an admin-uploaded video with no easy thumbnail).
 function ExercisePreview({ name }) {
+  const localImage = localExerciseImageUrl(name)
   const videoId = EXERCISE_VIDEO_IDS[name]
-  if (!videoId) return <ExerciseIcon name={name} />
+  const src = localImage || (videoId ? youtubeThumbnailUrl(videoId) : null)
+  if (!src) return <ExerciseIcon name={name} />
   return (
     <img
-      src={youtubeThumbnailUrl(videoId)}
+      src={src}
       alt=""
       className="quick-log-thumb"
       loading="lazy"
