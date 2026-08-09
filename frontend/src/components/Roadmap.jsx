@@ -3,7 +3,7 @@ import {
   BEGINNER_STAGES, STAGE_EXIT_DAYS, GRADUATION_MIN_WEEKS, GRADUATION_REWARD_AMOUNT,
   STAGE_2_MILESTONES, STAGE_2_MILESTONE_COPY, nextPendingStage2Milestone,
   nextStage, distinctLoggedDays, weeksSince, isReadyToGraduate,
-  stage1Prescription, stage2Prescription, EXERCISE_VIDEO_IDS, youtubeEmbedUrl,
+  stage1Prescription, stage2Prescription, EXERCISE_VIDEO_IDS, youtubeEmbedUrl, youtubeThumbnailUrl,
 } from '../lib/roadmap'
 import {
   advanceRoadmapStage, markRoadmapGraduated, insertFullWorkout, debugSetRoadmapProgress,
@@ -29,6 +29,24 @@ function ExerciseIcon({ name }) {
     <span className="picker-row-picto" style={{ background: color + '26', color }}>
       <Pic width="26" height="26" />
     </span>
+  )
+}
+
+// A real preview photo when there's a curated video for this exercise -
+// YouTube generates a thumbnail for every video automatically, so this
+// costs nothing extra beyond the video ID already on hand. Falls back
+// to the plain pictogram icon for anything without one (exercises added
+// via the picker, or an admin-uploaded video with no easy thumbnail).
+function ExercisePreview({ name }) {
+  const videoId = EXERCISE_VIDEO_IDS[name]
+  if (!videoId) return <ExerciseIcon name={name} />
+  return (
+    <img
+      src={youtubeThumbnailUrl(videoId)}
+      alt=""
+      className="quick-log-thumb"
+      loading="lazy"
+    />
   )
 }
 
@@ -303,7 +321,7 @@ function QuickLogSession({ user, exercises: fixedExercises, defaultUnit, onLogge
         const video = videoFor(ex.name)
         return (
           <div className="quick-log-row" key={ex.name}>
-            <ExerciseIcon name={ex.name} />
+            <ExercisePreview name={ex.name} />
             <div className="quick-log-info">
               <div className="quick-log-name">{ex.name}</div>
               <div className="quick-log-target">{ex.target}</div>

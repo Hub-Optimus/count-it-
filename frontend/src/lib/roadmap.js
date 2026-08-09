@@ -126,6 +126,14 @@ export function youtubeEmbedUrl(videoId) {
   return `https://www.youtube.com/embed/${videoId}`
 }
 
+// Static thumbnail for the exercise-list preview - YouTube generates
+// this automatically for every video, no extra upload or curation step
+// needed. mqdefault is a good balance of quality vs size for a small
+// inline thumbnail.
+export function youtubeThumbnailUrl(videoId) {
+  return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+}
+
 // ---- Stage 1 -> 2 and Stage 2 -> 3: session-count thresholds ----
 //
 // Distinct logged days, not total sets - "did you show up" is the

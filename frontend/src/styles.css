@@ -326,6 +326,15 @@ button { cursor: pointer; }
   border-bottom: 1px solid var(--line);
 }
 
+.quick-log-thumb {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--card-2);
+}
+
 .roadmap-video-modal {
   background: var(--bg);
   border: 1px solid var(--line);
