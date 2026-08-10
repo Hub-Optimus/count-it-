@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, Suspense, lazy } from 'react'
 import { supabase, configured } from './lib/supabase'
 import { fetchWorkouts, fetchProfile, mergeWorkouts, fetchTemplates, fetchBodyMetrics, fetchRoadmapProgress, saveRole } from './lib/db'
+import { warmUp } from './lib/api'
 import { todayISO } from './lib/format'
 import { peekDraft } from './lib/draft'
 import TabBar, { Tally } from './components/TabBar'
@@ -35,8 +36,38 @@ function currentBundleSrc() {
   return document.querySelector('script[src*="/assets/index-"]')?.src ?? null
 }
 
+// A plain logo for the first ~4s (covers the normal, fast case without
+// any extra noise), then a reassuring line if it's still waiting -
+// almost always means Render's free tier is waking the backend up from
+// sleep, which can take up to a minute. Without this, a slow-but-normal
+// load looks identical to something actually being broken.
+function Splash() {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 4000)
+    return () => clearTimeout(t)
+  }, [])
+  return (
+    <div className="splash">
+      <Tally size={52} />
+      {slow && (
+        <p className="small" style={{ marginTop: 14, textAlign: 'center', maxWidth: 260 }}>
+          Waking things up - this can take up to a minute if the server's been idle.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still checking
+
+  // Fired unconditionally, before anything else - the backend might be
+  // asleep (Render free tier), and this gives it a head start waking up
+  // while the person is still looking at the login screen, rather than
+  // only starting once they've already signed in and are waiting on it.
+  useEffect(() => { warmUp() }, [])
+
   // Checked synchronously from the raw URL on first render - NOT from the
   // PASSWORD_RECOVERY auth event alone. Supabase's client parses a recovery
   // link's token as soon as it's created (before this component even
@@ -131,21 +162,13 @@ export default function App() {
   }
 
   if (session === undefined) {
-    return (
-      <div className="splash">
-        <Tally size={52} />
-      </div>
-    )
+    return <Splash />
   }
 
   if (!session) return <Auth />
 
   if (applyingPendingRole) {
-    return (
-      <div className="splash">
-        <Tally size={52} />
-      </div>
-    )
+    return <Splash />
   }
 
   return <Main user={session.user} />
@@ -334,11 +357,7 @@ export function Main({ user, skipRoleRouting = false }) {
   }
 
   if (profile === undefined) {
-    return (
-      <div className="splash">
-        <Tally size={52} />
-      </div>
-    )
+    return <Splash />
   }
 
   // Owner/Trainer accounts normally get their own dashboard instead of
