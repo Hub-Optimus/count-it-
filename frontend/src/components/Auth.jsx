@@ -97,6 +97,16 @@ export default function Auth() {
       } else {
         const { data, error } = await supabase.auth.signUp({ email: email.trim(), password })
         if (error) throw error
+        // Supabase deliberately doesn't error on a duplicate confirmed
+        // email (prevents attackers probing which emails are
+        // registered) - it returns a fake-looking success instead, with
+        // an empty identities array as the only tell. Catch it here so
+        // people don't see a misleading "check your email" message for
+        // an email that was never going to get one.
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          setError('This email is already registered. Sign in instead, or use a different email for this account type.')
+          return
+        }
         await completeRoleSetup(email.trim())
         if (!data.session) {
           setInfo('Account created. Check your email for the confirmation link, then sign in.')

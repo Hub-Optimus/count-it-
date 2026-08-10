@@ -625,6 +625,16 @@ button { cursor: pointer; }
 
 /* ---------- chips ---------- */
 
+.role-view-switch {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.role-view-back-bar {
+  padding-top: 12px;
+}
+
 .chip-row {
   display: flex;
   flex-wrap: wrap;

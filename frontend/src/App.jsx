@@ -151,7 +151,7 @@ export default function App() {
   return <Main user={session.user} />
 }
 
-export function Main({ user }) {
+export function Main({ user, skipRoleRouting = false }) {
   const [tab, setTab] = useState('log')
   const [workouts, setWorkouts] = useState(null) // null = loading
   const [loadError, setLoadError] = useState('')
@@ -341,12 +341,15 @@ export function Main({ user }) {
     )
   }
 
-  // Owner/Trainer accounts skip the individual onboarding wizard and
-  // workout-logging UI entirely - they get their own dashboard instead.
-  if (profile?.role === 'owner') {
+  // Owner/Trainer accounts normally get their own dashboard instead of
+  // this individual workout-logging view - unless they've explicitly
+  // opened it themselves (their dashboard's "My Workouts" tab), in
+  // which case skipRoleRouting keeps them here instead of bouncing
+  // straight back to their dashboard.
+  if (!skipRoleRouting && profile?.role === 'owner') {
     return <OwnerDashboard user={user} profile={profile} />
   }
-  if (profile?.role === 'trainer') {
+  if (!skipRoleRouting && profile?.role === 'trainer') {
     return <TrainerDashboard user={user} profile={profile} />
   }
 

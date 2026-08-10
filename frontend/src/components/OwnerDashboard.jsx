@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchGymMembers, assignTrainer } from '../lib/db'
 import { Tally } from './TabBar'
+import { Main } from '../App'
 
 export default function OwnerDashboard({ user, profile }) {
+  const [view, setView] = useState('gym') // 'gym' | 'workouts'
   const [data, setData] = useState(null) // null = loading
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
@@ -23,6 +25,19 @@ export default function OwnerDashboard({ user, profile }) {
     }
   }
 
+  if (view === 'workouts') {
+    return (
+      <>
+        <div className="app">
+          <div className="role-view-back-bar">
+            <button className="btn btn-ghost" onClick={() => setView('gym')}>← Back to gym</button>
+          </div>
+        </div>
+        <Main user={user} skipRoleRouting />
+      </>
+    )
+  }
+
   return (
     <div className="app-shell">
       <div className="app">
@@ -35,6 +50,11 @@ export default function OwnerDashboard({ user, profile }) {
           <h1 className="page-title">{profile?.gym_name || 'Your Gym'}</h1>
           <button className="btn header-action" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </header>
+
+        <div className="role-view-switch">
+          <button className="chip on">Gym</button>
+          <button className="chip" onClick={() => setView('workouts')}>My Workouts</button>
+        </div>
 
         <div className="card">
           <label className="label">Gym code</label>

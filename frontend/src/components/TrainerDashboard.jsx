@@ -2,14 +2,29 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchTrainerClients } from '../lib/db'
 import { Tally } from './TabBar'
+import { Main } from '../App'
 
 export default function TrainerDashboard({ user }) {
+  const [view, setView] = useState('clients') // 'clients' | 'workouts'
   const [clients, setClients] = useState(null) // null = loading
   const [error, setError] = useState('')
 
   useEffect(() => {
     fetchTrainerClients().then(setClients).catch((e) => setError(e.message || 'Could not load your clients.'))
   }, [])
+
+  if (view === 'workouts') {
+    return (
+      <>
+        <div className="app">
+          <div className="role-view-back-bar">
+            <button className="btn btn-ghost" onClick={() => setView('clients')}>← Back to clients</button>
+          </div>
+        </div>
+        <Main user={user} skipRoleRouting />
+      </>
+    )
+  }
 
   return (
     <div className="app-shell">
@@ -23,6 +38,11 @@ export default function TrainerDashboard({ user }) {
           <h1 className="page-title">My Clients</h1>
           <button className="btn header-action" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </header>
+
+        <div className="role-view-switch">
+          <button className="chip on">My Clients</button>
+          <button className="chip" onClick={() => setView('workouts')}>My Workouts</button>
+        </div>
 
         {error && <p className="error">{error}</p>}
         {clients === null && !error && <p className="empty">Loading…</p>}
