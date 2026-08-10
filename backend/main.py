@@ -847,3 +847,4 @@ def fetch_emails_for_users(client: Client, user_ids: list) -> dict:
         except Exception:
             out[uid] = None
     return out
+    
