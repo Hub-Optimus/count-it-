@@ -627,6 +627,35 @@ def generate_gym_code(client: Client) -> str:
     raise HTTPException(status_code=500, detail="Could not generate a unique gym code, try again.")
 
 
+@app.get("/api/gyms/search")
+def search_gyms(q: str = ""):
+    # No login required - this runs from the Trainer signup screen,
+    # before the person has an account yet. Uses the service role key
+    # (bypasses RLS) since an unauthenticated request has no auth.uid()
+    # to satisfy the normal per-user policies. Only gym_name and
+    # owner_gym_code are ever selected or returned here - never contact
+    # numbers, owner names, or anything else from the profile row, even
+    # though the service role technically has access to all of it.
+    query = (q or "").strip()
+    if len(query) < 2 or not SUPABASE_SERVICE_ROLE_KEY:
+        return []
+    admin_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    res = (
+        admin_client.table("profiles")
+        .select("gym_name, owner_gym_code")
+        .eq("role", "owner")
+        .not_.is_("owner_gym_code", "null")
+        .ilike("gym_name", f"%{query}%")
+        .limit(8)
+        .execute()
+    )
+    return [
+        {"gymName": r["gym_name"], "gymCode": r["owner_gym_code"]}
+        for r in (res.data or [])
+        if r.get("gym_name") and r.get("owner_gym_code")
+    ]
+
+
 @app.post("/api/profile/role")
 def save_role(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
     role = body.get("role")
