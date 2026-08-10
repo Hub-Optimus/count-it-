@@ -724,6 +724,37 @@ button { cursor: pointer; }
 
 .field { margin-bottom: 14px; }
 
+.gym-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin-top: 4px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.gym-search-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.gym-search-option:last-of-type { border-bottom: none; }
+
+.gym-search-option:hover { background: var(--card); }
+
 .field-hint { font-size: 12px; color: var(--ink-faint); margin-top: 4px; }
 
 .label {

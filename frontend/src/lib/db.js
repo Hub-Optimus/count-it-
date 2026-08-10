@@ -252,6 +252,16 @@ export async function deleteVideo(id) {
 
 // ---- roles & gyms (Individual / Owner / Trainer) ----
 
+// Public - no login yet at this point (called from the signup screen).
+// Searches by gym name, returns matching {gymName, gymCode} pairs so
+// someone can pick their gym without needing to know the exact code.
+export async function searchGyms(query) {
+  const mock = testMock()
+  if (mock) return mock.gymSearchResults ?? []
+  if (!query || query.trim().length < 2) return []
+  return api.get(`/api/gyms/search?q=${encodeURIComponent(query.trim())}`)
+}
+
 export async function saveRole({ role, ownerName, gymName, contact, gymCode }) {
   const mock = testMock()
   if (mock) {
