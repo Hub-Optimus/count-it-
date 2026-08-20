@@ -14,7 +14,7 @@ Mirrors src/lib/db.js function-for-function so behavior doesn't change.
 import os
 import secrets
 import string
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
@@ -829,6 +829,108 @@ def fetch_trainer_clients(ctx: AuthCtx = Depends(get_auth)):
     return out
 
 
+# ---------------------------------------------------------- join a gym
+
+@app.post("/api/profile/join-gym")
+def join_gym(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
+    # Lets an existing Individual account link to a gym after the fact
+    # (Trainers already do this at signup) - needed before check-in
+    # works, since attendance rows are scoped by gym code.
+    gym_code = (body.get("gymCode") or "").strip().upper()
+    if not gym_code:
+        raise HTTPException(status_code=400, detail="Enter a gym code.")
+    owner_row = (
+        ctx.client.table("profiles")
+        .select("user_id, gym_name")
+        .eq("owner_gym_code", gym_code)
+        .eq("role", "owner")
+        .maybe_single()
+        .execute()
+    )
+    if not owner_row or not owner_row.data:
+        raise HTTPException(status_code=400, detail="That gym code doesn't match any gym.")
+    ctx.client.table("profiles").update(
+        {"linked_gym_code": gym_code, "updated_at": now_iso()}
+    ).eq("user_id", ctx.user_id).execute()
+    return {"gymName": owner_row.data.get("gym_name"), "gymCode": gym_code}
+
+
+# --------------------------------------------------------- attendance
+
+@app.post("/api/attendance/checkin")
+def check_in(ctx: AuthCtx = Depends(get_auth)):
+    me = (
+        ctx.client.table("profiles")
+        .select("linked_gym_code")
+        .eq("user_id", ctx.user_id)
+        .maybe_single()
+        .execute()
+    )
+    gym_code = me.data.get("linked_gym_code") if me and me.data else None
+    if not gym_code:
+        raise HTTPException(status_code=400, detail="Join a gym first (in Settings) before checking in.")
+    # Upsert on (user_id, date) - checking in twice the same day just
+    # refreshes the timestamp instead of erroring or duplicating.
+    ctx.client.table("attendance").upsert(
+        {"user_id": ctx.user_id, "gym_code": gym_code, "date": today_iso(), "checked_in_at": now_iso()},
+        on_conflict="user_id,date",
+    ).execute()
+    return {"ok": True, "date": today_iso()}
+
+
+@app.get("/api/attendance/today")
+def my_checkin_today(ctx: AuthCtx = Depends(get_auth)):
+    res = (
+        ctx.client.table("attendance")
+        .select("checked_in_at")
+        .eq("user_id", ctx.user_id)
+        .eq("date", today_iso())
+        .maybe_single()
+        .execute()
+    )
+    return {"checkedIn": bool(res and res.data)}
+
+
+@app.get("/api/gym/attendance")
+def fetch_gym_attendance(ctx: AuthCtx = Depends(get_auth)):
+    me = (
+        ctx.client.table("profiles")
+        .select("role, owner_gym_code")
+        .eq("user_id", ctx.user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not me or not me.data or me.data.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only a gym owner can view this.")
+    gym_code = me.data.get("owner_gym_code")
+
+    rows = (
+        ctx.client.table("attendance")
+        .select("user_id, date, checked_in_at")
+        .eq("gym_code", gym_code)
+        .order("checked_in_at", desc=True)
+        .limit(200)
+        .execute()
+    )
+    data = rows.data or []
+    user_ids = list({r["user_id"] for r in data})
+    emails_by_id = fetch_emails_for_users(ctx.client, user_ids)
+
+    today = today_iso()
+    today_rows = [r for r in data if r["date"] == today]
+    return {
+        "todayCount": len(today_rows),
+        "today": [
+            {"userId": r["user_id"], "email": emails_by_id.get(r["user_id"]), "checkedInAt": r["checked_in_at"]}
+            for r in today_rows
+        ],
+        "recent": [
+            {"userId": r["user_id"], "email": emails_by_id.get(r["user_id"]), "date": r["date"]}
+            for r in data
+        ],
+    }
+
+
 def fetch_emails_for_users(client: Client, user_ids: list) -> dict:
     # profiles doesn't store email (it lives on auth.users) - the admin
     # auth API is the only way to resolve it, and only the service role
@@ -847,4 +949,78 @@ def fetch_emails_for_users(client: Client, user_ids: list) -> dict:
         except Exception:
             out[uid] = None
     return out
-    
+
+
+# --------------------------------------------------------- memberships
+
+@app.post("/api/gym/memberships")
+def create_membership(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
+    # Cash only for now - UPI/card go through a real payment gateway,
+    # a separate, later phase once that's set up.
+    member_user_id = body.get("memberUserId")
+    plan_months = body.get("planMonths")
+    price = body.get("price")
+    payment_method = body.get("paymentMethod", "cash")
+
+    if not member_user_id or plan_months not in (1, 3, 6, 12) or price is None:
+        raise HTTPException(status_code=400, detail="memberUserId, a valid planMonths (1/3/6/12), and price are required.")
+    if payment_method != "cash":
+        raise HTTPException(status_code=400, detail="Only cash payments are supported right now.")
+
+    member_row = (
+        ctx.client.table("profiles")
+        .select("linked_gym_code")
+        .eq("user_id", member_user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not member_row or not member_row.data or not member_row.data.get("linked_gym_code"):
+        raise HTTPException(status_code=400, detail="This member hasn't joined a gym yet.")
+
+    starts_on = today_iso()
+    ends_on = (datetime.now(timezone.utc) + timedelta(days=30 * int(plan_months))).date().isoformat()
+
+    # RLS enforces this can only succeed for the caller's own gym - a
+    # mismatched attempt is rejected by the database itself.
+    ctx.client.table("memberships").insert(
+        {
+            "user_id": member_user_id,
+            "gym_code": member_row.data["linked_gym_code"],
+            "plan_months": plan_months,
+            "price": price,
+            "payment_method": payment_method,
+            "starts_on": starts_on,
+            "ends_on": ends_on,
+            "created_by": ctx.user_id,
+        }
+    ).execute()
+    return {"ok": True, "startsOn": starts_on, "endsOn": ends_on}
+
+
+@app.get("/api/gym/memberships")
+def fetch_gym_memberships(ctx: AuthCtx = Depends(get_auth)):
+    # RLS scopes this to the caller's own gym automatically - same
+    # pattern as every other owner-facing list endpoint in this app.
+    res = (
+        ctx.client.table("memberships")
+        .select("user_id, plan_months, price, payment_method, starts_on, ends_on, created_at")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    rows = res.data or []
+    user_ids = list({r["user_id"] for r in rows})
+    emails_by_id = fetch_emails_for_users(ctx.client, user_ids)
+    today = today_iso()
+    return [
+        {
+            "userId": r["user_id"],
+            "email": emails_by_id.get(r["user_id"]),
+            "planMonths": r["plan_months"],
+            "price": r["price"],
+            "paymentMethod": r["payment_method"],
+            "startsOn": r["starts_on"],
+            "endsOn": r["ends_on"],
+            "active": r["ends_on"] >= today,
+        }
+        for r in rows
+    ]
