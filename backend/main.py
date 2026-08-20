@@ -1024,3 +1024,4 @@ def fetch_gym_memberships(ctx: AuthCtx = Depends(get_auth)):
         }
         for r in rows
     ]
+    
