@@ -1,75 +1,14 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { saveRole, searchGyms } from '../lib/db'
+import { saveRole } from '../lib/db'
 import { Tally } from './TabBar'
+import GymCodeField from './GymCodeField'
 
 const ACCOUNT_TYPES = [
   { id: 'individual', label: 'Individual' },
   { id: 'owner', label: 'Gym Owner' },
   { id: 'trainer', label: 'Trainer' },
 ]
-
-// Search-as-you-type by gym name, so nobody has to remember/copy-paste
-// an exact code - picking a suggestion fills in the real code, but
-// typing a code directly still works too (same field, same onChange).
-function GymCodeField({ value, onChange }) {
-  const [query, setQuery] = useState(value || '')
-  const [results, setResults] = useState([])
-  const [open, setOpen] = useState(false)
-  const timerRef = useRef(null)
-
-  function handleChange(e) {
-    const v = e.target.value
-    setQuery(v)
-    onChange(v)
-    clearTimeout(timerRef.current)
-    if (v.trim().length < 2) {
-      setResults([])
-      setOpen(false)
-      return
-    }
-    timerRef.current = setTimeout(() => {
-      searchGyms(v)
-        .then((matches) => {
-          setResults(matches)
-          setOpen(matches.length > 0)
-        })
-        .catch(() => {})
-    }, 300)
-  }
-
-  function pick(gym) {
-    setQuery(gym.gymCode)
-    onChange(gym.gymCode)
-    setResults([])
-    setOpen(false)
-  }
-
-  return (
-    <div className="field" style={{ position: 'relative' }}>
-      <label className="label" htmlFor="gym-code">Gym name or code</label>
-      <input
-        id="gym-code"
-        className="input"
-        placeholder="Start typing your gym's name…"
-        value={query}
-        onChange={handleChange}
-        onFocus={() => results.length > 0 && setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        autoComplete="off"
-      />
-      {open && (
-        <div className="gym-search-dropdown">
-          {results.map((g) => (
-            <button type="button" key={g.gymCode} className="gym-search-option" onMouseDown={() => pick(g)}>
-              {g.gymName} <span className="small">({g.gymCode})</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function Auth() {
   const [mode, setMode] = useState('signin') // 'signin' | 'signup' | 'reset'
@@ -267,7 +206,11 @@ export default function Auth() {
       )}
 
       {mode === 'signup' && accountType === 'trainer' && (
-        <GymCodeField value={gymCode} onChange={setGymCode} />
+        <GymCodeField value={gymCode} onChange={setGymCode} label="Gym code (from your gym owner)" />
+      )}
+
+      {mode === 'signup' && accountType === 'individual' && (
+        <GymCodeField value={gymCode} onChange={setGymCode} label="Gym code (optional - if your gym uses Count It)" />
       )}
 
       {mode === 'signin' && (

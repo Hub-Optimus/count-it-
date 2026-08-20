@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { fetchGymMembers, assignTrainer } from '../lib/db'
+import { fetchGymMembers, assignTrainer, fetchGymAttendance, createMembership, fetchGymMemberships } from '../lib/db'
 import { Tally } from './TabBar'
 import { Main } from '../App'
 
@@ -9,9 +9,15 @@ export default function OwnerDashboard({ user, profile }) {
   const [data, setData] = useState(null) // null = loading
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [attendance, setAttendance] = useState(null) // null = loading
 
   const load = () => fetchGymMembers().then(setData).catch((e) => setError(e.message || 'Could not load your gym.'))
   useEffect(() => { load() }, [])
+  useEffect(() => { fetchGymAttendance().then(setAttendance).catch(() => setAttendance(null)) }, [])
+
+  const [memberships, setMemberships] = useState([])
+  const loadMemberships = () => fetchGymMemberships().then(setMemberships).catch(() => {})
+  useEffect(() => { loadMemberships() }, [])
 
   async function copyCode() {
     if (!data?.gymCode) return
@@ -69,6 +75,22 @@ export default function OwnerDashboard({ user, profile }) {
           </div>
         </div>
 
+        <div className="card">
+          <label className="label">Today's check-ins {attendance ? `(${attendance.todayCount})` : ''}</label>
+          {attendance === null && <p className="small" style={{ margin: '6px 0 0' }}>Loading…</p>}
+          {attendance && attendance.today.length === 0 && (
+            <p className="small" style={{ margin: '6px 0 0' }}>No one has checked in yet today.</p>
+          )}
+          {attendance && attendance.today.map((c) => (
+            <div key={c.userId} className="quick-log-row">
+              <div className="quick-log-info">
+                <div className="quick-log-name">{c.email || 'Member'}</div>
+                <div className="quick-log-target">{new Date(c.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {error && <p className="error">{error}</p>}
         {data === null && !error && <p className="empty">Loading…</p>}
 
@@ -91,7 +113,14 @@ export default function OwnerDashboard({ user, profile }) {
               <label className="label">Members ({data.members.length})</label>
               {data.members.length === 0 && <p className="small" style={{ margin: '6px 0 0' }}>No members have joined with your code yet.</p>}
               {data.members.map((m) => (
-                <MemberRow key={m.userId} member={m} trainers={data.trainers} onAssigned={load} />
+                <MemberRow
+                  key={m.userId}
+                  member={m}
+                  trainers={data.trainers}
+                  onAssigned={load}
+                  membership={memberships.find((mem) => mem.userId === m.userId)}
+                  onMembershipSaved={loadMemberships}
+                />
               ))}
             </div>
           </>
@@ -101,8 +130,9 @@ export default function OwnerDashboard({ user, profile }) {
   )
 }
 
-function MemberRow({ member, trainers, onAssigned }) {
+function MemberRow({ member, trainers, onAssigned, membership, onMembershipSaved }) {
   const [busy, setBusy] = useState(false)
+  const [showPlanForm, setShowPlanForm] = useState(false)
 
   async function handleChange(e) {
     const trainerId = e.target.value || null
@@ -118,16 +148,90 @@ function MemberRow({ member, trainers, onAssigned }) {
   }
 
   return (
-    <div className="quick-log-row">
-      <div className="quick-log-info">
-        <div className="quick-log-name">{member.email || 'Member'}</div>
+    <div>
+      <div className="quick-log-row">
+        <div className="quick-log-info">
+          <div className="quick-log-name">{member.email || 'Member'}</div>
+          {membership && (
+            <div className="quick-log-target" style={{ color: membership.active ? 'var(--green)' : 'var(--red)' }}>
+              {membership.planMonths}-month plan · {membership.active ? `active until ${membership.endsOn}` : `expired ${membership.endsOn}`}
+            </div>
+          )}
+          <button type="button" className="text-link-btn" style={{ padding: 0, marginTop: 2 }} onClick={() => setShowPlanForm((v) => !v)}>
+            {membership ? 'Renew / change plan' : '+ Set membership plan'}
+          </button>
+        </div>
+        <select className="input" style={{ width: 160 }} value={member.assignedTrainerId || ''} onChange={handleChange} disabled={busy}>
+          <option value="">No trainer</option>
+          {trainers.map((t) => (
+            <option key={t.userId} value={t.userId}>{t.email || 'Trainer'}</option>
+          ))}
+        </select>
       </div>
-      <select className="input" style={{ width: 160 }} value={member.assignedTrainerId || ''} onChange={handleChange} disabled={busy}>
-        <option value="">No trainer</option>
-        {trainers.map((t) => (
-          <option key={t.userId} value={t.userId}>{t.email || 'Trainer'}</option>
-        ))}
-      </select>
+      {showPlanForm && (
+        <MembershipForm
+          memberUserId={member.userId}
+          onDone={() => {
+            setShowPlanForm(false)
+            onMembershipSaved()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function MembershipForm({ memberUserId, onDone }) {
+  const [planMonths, setPlanMonths] = useState(1)
+  const [price, setPrice] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    setError('')
+    const numericPrice = parseFloat(price)
+    if (!numericPrice || numericPrice <= 0) {
+      setError('Enter a valid price.')
+      return
+    }
+    setBusy(true)
+    try {
+      await createMembership({ memberUserId, planMonths, price: numericPrice, paymentMethod: 'cash' })
+      onDone()
+    } catch (e) {
+      setError(e.message || 'Could not save that. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card" style={{ margin: '0 0 10px' }}>
+      <div className="field">
+        <label className="label" htmlFor="plan-months">Plan length</label>
+        <select id="plan-months" className="input" value={planMonths} onChange={(e) => setPlanMonths(Number(e.target.value))}>
+          <option value={1}>1 month</option>
+          <option value={3}>3 months</option>
+          <option value={6}>6 months</option>
+          <option value={12}>1 year</option>
+        </select>
+      </div>
+      <div className="field">
+        <label className="label" htmlFor="plan-price">Price (₹)</label>
+        <input
+          id="plan-price"
+          className="input"
+          inputMode="decimal"
+          placeholder="e.g. 3000"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+        />
+      </div>
+      <p className="small" style={{ margin: '0 0 10px' }}>Payment method: Cash (UPI/card coming soon)</p>
+      {error && <p className="error">{error}</p>}
+      <button className="btn btn-primary btn-block" onClick={submit} disabled={busy}>
+        {busy ? 'Saving…' : 'Mark as paid (cash) & activate'}
+      </button>
     </div>
   )
 }

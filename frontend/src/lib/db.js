@@ -291,3 +291,54 @@ export async function fetchTrainerClients() {
   if (mock) return mock.trainerClients ?? []
   return api.get('/api/trainer/clients')
 }
+
+// ---- join a gym (Individual accounts, after signup) ----
+
+export async function joinGym(gymCode) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { gymCode }
+    return { gymName: 'Test Gym', gymCode }
+  }
+  return api.post('/api/profile/join-gym', { gymCode })
+}
+
+// ---- attendance / check-in ----
+
+export async function checkIn() {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { checkedIn: true }
+    return { ok: true }
+  }
+  return api.post('/api/attendance/checkin')
+}
+
+export async function fetchTodayCheckin() {
+  const mock = testMock()
+  if (mock) return mock.checkedInToday ?? { checkedIn: false }
+  return api.get('/api/attendance/today')
+}
+
+export async function fetchGymAttendance() {
+  const mock = testMock()
+  if (mock) return mock.gymAttendance ?? { todayCount: 0, today: [], recent: [] }
+  return api.get('/api/gym/attendance')
+}
+
+// ---- memberships (cash tracking for now, gateway later) ----
+
+export async function createMembership({ memberUserId, planMonths, price, paymentMethod = 'cash' }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { memberUserId, planMonths, price, paymentMethod }
+    return { ok: true }
+  }
+  return api.post('/api/gym/memberships', { memberUserId, planMonths, price, paymentMethod })
+}
+
+export async function fetchGymMemberships() {
+  const mock = testMock()
+  if (mock) return mock.memberships ?? []
+  return api.get('/api/gym/memberships')
+}
