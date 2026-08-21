@@ -1,11 +1,97 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { fetchGymMembers, assignTrainer, fetchGymAttendance, createMembership, fetchGymMemberships, createGymClass, fetchGymClasses, deleteGymClass, fetchClassRoster } from '../lib/db'
+import {
+  fetchGymMembers, assignTrainer, fetchGymAttendance, createMembership, fetchGymMemberships,
+  createGymClass, fetchGymClasses, deleteGymClass, fetchClassRoster,
+} from '../lib/db'
 import { Tally } from './TabBar'
 import { Main } from '../App'
 
+const NAV_ICONS = {
+  dashboard: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="8" height="8" rx="1.5" />
+      <rect x="13" y="3" width="8" height="5" rx="1.5" />
+      <rect x="13" y="10" width="8" height="11" rx="1.5" />
+      <rect x="3" y="13" width="8" height="8" rx="1.5" />
+    </svg>
+  ),
+  members: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
+      <circle cx="17.5" cy="9" r="2.4" />
+      <path d="M15.5 14.2c2.6.3 4.5 2 4.9 4.8" />
+    </svg>
+  ),
+  trainers: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="2" y1="12" x2="4.5" y2="12" />
+      <rect x="4.5" y="7" width="3" height="10" rx="1" />
+      <rect x="16.5" y="7" width="3" height="10" rx="1" />
+      <line x1="7.5" y1="12" x2="16.5" y2="12" />
+      <line x1="19.5" y1="12" x2="22" y2="12" />
+    </svg>
+  ),
+  attendance: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <path d="M8 14.5l2 2 4-4" />
+    </svg>
+  ),
+  classes: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+    </svg>
+  ),
+}
+
+const SECTIONS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'members', label: 'Members' },
+  { id: 'trainers', label: 'Trainers' },
+  { id: 'attendance', label: 'Attendance' },
+  { id: 'classes', label: 'Classes' },
+]
+
+function OwnerNav({ section, onChange, gymName, onSwitchToWorkouts, onSignOut }) {
+  return (
+    <nav className="tabbar">
+      <div className="tabbar-brand">
+        <Tally size={26} />
+        <span className="tabbar-brand-name">Count It</span>
+      </div>
+      {SECTIONS.map((s) => (
+        <button
+          key={s.id}
+          className={`tab ${section === s.id ? 'on' : ''}`}
+          onClick={() => onChange(s.id)}
+          aria-current={section === s.id ? 'page' : undefined}
+        >
+          {NAV_ICONS[s.id]}
+          {s.label}
+        </button>
+      ))}
+      <div className="tabbar-foot">
+        <div className="tabbar-count">{gymName || 'Your gym'}</div>
+        <button type="button" className="text-link-btn" style={{ padding: 0 }} onClick={onSwitchToWorkouts}>
+          My Workouts
+        </button>
+        <button type="button" className="text-link-btn" style={{ padding: 0, marginTop: 6 }} onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
+    </nav>
+  )
+}
+
 export default function OwnerDashboard({ user, profile }) {
   const [view, setView] = useState('gym') // 'gym' | 'workouts'
+  const [section, setSection] = useState('dashboard')
   const [data, setData] = useState(null) // null = loading
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
@@ -51,6 +137,13 @@ export default function OwnerDashboard({ user, profile }) {
 
   return (
     <div className="app-shell">
+      <OwnerNav
+        section={section}
+        onChange={setSection}
+        gymName={profile?.gym_name}
+        onSwitchToWorkouts={() => setView('workouts')}
+        onSignOut={() => supabase.auth.signOut()}
+      />
       <div className="app">
         <header className="app-header">
           <span className="brand">
@@ -58,111 +151,168 @@ export default function OwnerDashboard({ user, profile }) {
             <span className="brand-name">Count It</span>
           </span>
           <span className="brand-sub">{user.email}</span>
-          <h1 className="page-title">{profile?.gym_name || 'Your Gym'}</h1>
+          <h1 className="page-title">{SECTIONS.find((s) => s.id === section)?.label}</h1>
           <button className="btn header-action" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </header>
 
-        <div className="role-view-switch">
-          <button className="chip on">Gym</button>
-          <button className="chip" onClick={() => setView('workouts')}>My Workouts</button>
+        <div className="owner-mobile-actions">
+          <button type="button" className="chip" onClick={() => setView('workouts')}>My Workouts</button>
+          <button type="button" className="chip" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
 
-        <StatCards
-          totalMembers={data?.members.length}
-          totalTrainers={data?.trainers.length}
-          todayCheckins={attendance?.todayCount}
-          activeMemberships={memberships.filter((m) => m.active).length}
+        {error && <p className="error">{error}</p>}
+
+        {section === 'dashboard' && (
+          <DashboardSection data={data} attendance={attendance} memberships={memberships} gymCode={data?.gymCode} onCopy={copyCode} copied={copied} />
+        )}
+
+        {section === 'members' && (
+          <MembersSection data={data} memberships={memberships} loadMemberships={loadMemberships} load={load} />
+        )}
+
+        {section === 'trainers' && <TrainersSection data={data} />}
+
+        {section === 'attendance' && <AttendanceSection attendance={attendance} />}
+
+        {section === 'classes' && (
+          <ClassesSection
+            classes={classes}
+            trainers={data?.trainers || []}
+            showClassForm={showClassForm}
+            setShowClassForm={setShowClassForm}
+            loadClasses={loadClasses}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DashboardSection({ data, attendance, memberships, gymCode, onCopy, copied }) {
+  return (
+    <>
+      <StatCards
+        totalMembers={data?.members.length}
+        totalTrainers={data?.trainers.length}
+        todayCheckins={attendance?.todayCount}
+        activeMemberships={memberships.filter((m) => m.active).length}
+      />
+
+      {attendance && attendance.recent.length > 0 && <AttendanceChart recent={attendance.recent} />}
+
+      <div className="card">
+        <label className="label">Gym code</label>
+        <p className="small" style={{ margin: '0 0 10px' }}>
+          Share this with your trainers and members - they enter it when they sign up to join your gym.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: 2 }}>{gymCode || '······'}</span>
+          <button className="btn btn-ghost" onClick={onCopy} disabled={!gymCode}>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function MembersSection({ data, memberships, loadMemberships, load }) {
+  return (
+    <div className="card">
+      <label className="label">Members ({data?.members.length ?? 0})</label>
+      {data && data.members.length === 0 && <p className="small" style={{ margin: '6px 0 0' }}>No members have joined with your code yet.</p>}
+      {data === null && <p className="empty">Loading…</p>}
+      {data && data.members.map((m) => (
+        <MemberRow
+          key={m.userId}
+          member={m}
+          trainers={data.trainers}
+          onAssigned={load}
+          membership={memberships.find((mem) => mem.userId === m.userId)}
+          onMembershipSaved={loadMemberships}
         />
+      ))}
+    </div>
+  )
+}
 
-        {attendance && attendance.recent.length > 0 && <AttendanceChart recent={attendance.recent} />}
-
-        <div className="card">
-          <label className="label">Gym code</label>
-          <p className="small" style={{ margin: '0 0 10px' }}>
-            Share this with your trainers and members - they enter it when they sign up to join your gym.
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: 2 }}>{data?.gymCode || '······'}</span>
-            <button className="btn btn-ghost" onClick={copyCode} disabled={!data?.gymCode}>
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
+function TrainersSection({ data }) {
+  return (
+    <div className="card">
+      <label className="label">Trainers ({data?.trainers.length ?? 0})</label>
+      {data && data.trainers.length === 0 && <p className="small" style={{ margin: '6px 0 0' }}>No trainers have joined with your code yet.</p>}
+      {data === null && <p className="empty">Loading…</p>}
+      {data && data.trainers.map((t) => (
+        <div key={t.userId} className="quick-log-row">
+          <div className="quick-log-info">
+            <div className="quick-log-name">{t.fullName || t.email || 'Trainer'}</div>
+            {t.fullName && t.email && <div className="quick-log-target">{t.email}</div>}
+            {t.contact && <div className="quick-log-target">{t.contact}</div>}
           </div>
         </div>
+      ))}
+    </div>
+  )
+}
 
+function AttendanceSection({ attendance }) {
+  return (
+    <>
+      {attendance && attendance.recent.length > 0 && <AttendanceChart recent={attendance.recent} />}
+      <div className="card">
+        <label className="label">Today's check-ins {attendance ? `(${attendance.todayCount})` : ''}</label>
+        {attendance === null && <p className="small" style={{ margin: '6px 0 0' }}>Loading…</p>}
+        {attendance && attendance.today.length === 0 && (
+          <p className="small" style={{ margin: '6px 0 0' }}>No one has checked in yet today.</p>
+        )}
+        {attendance && attendance.today.map((c) => (
+          <div key={c.userId} className="quick-log-row">
+            <div className="quick-log-info">
+              <div className="quick-log-name">{c.email || 'Member'}</div>
+              <div className="quick-log-target">{new Date(c.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {attendance && attendance.recent.length > 0 && (
         <div className="card">
-          <label className="label">Today's check-ins {attendance ? `(${attendance.todayCount})` : ''}</label>
-          {attendance === null && <p className="small" style={{ margin: '6px 0 0' }}>Loading…</p>}
-          {attendance && attendance.today.length === 0 && (
-            <p className="small" style={{ margin: '6px 0 0' }}>No one has checked in yet today.</p>
-          )}
-          {attendance && attendance.today.map((c) => (
-            <div key={c.userId} className="quick-log-row">
+          <label className="label">Recent history</label>
+          {attendance.recent.slice(0, 30).map((r, i) => (
+            <div key={`${r.userId}-${r.date}-${i}`} className="quick-log-row">
               <div className="quick-log-info">
-                <div className="quick-log-name">{c.email || 'Member'}</div>
-                <div className="quick-log-target">{new Date(c.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div className="quick-log-name">{r.email || 'Member'}</div>
+                <div className="quick-log-target">{r.date}</div>
               </div>
             </div>
           ))}
         </div>
+      )}
+    </>
+  )
+}
 
-        {error && <p className="error">{error}</p>}
-        {data === null && !error && <p className="empty">Loading…</p>}
-
-        {data && (
-          <>
-            <div className="card">
-              <label className="label">Trainers ({data.trainers.length})</label>
-              {data.trainers.length === 0 && <p className="small" style={{ margin: '6px 0 0' }}>No trainers have joined with your code yet.</p>}
-              {data.trainers.map((t) => (
-                <div key={t.userId} className="quick-log-row">
-                  <div className="quick-log-info">
-                    <div className="quick-log-name">{t.fullName || t.email || 'Trainer'}</div>
-                    {t.fullName && t.email && <div className="quick-log-target">{t.email}</div>}
-                    {t.contact && <div className="quick-log-target">{t.contact}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="card">
-              <label className="label">Members ({data.members.length})</label>
-              {data.members.length === 0 && <p className="small" style={{ margin: '6px 0 0' }}>No members have joined with your code yet.</p>}
-              {data.members.map((m) => (
-                <MemberRow
-                  key={m.userId}
-                  member={m}
-                  trainers={data.trainers}
-                  onAssigned={load}
-                  membership={memberships.find((mem) => mem.userId === m.userId)}
-                  onMembershipSaved={loadMemberships}
-                />
-              ))}
-            </div>
-          </>
-        )}
-
-        <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <label className="label" style={{ margin: 0 }}>Upcoming classes</label>
-            <button type="button" className="text-link-btn" onClick={() => setShowClassForm((v) => !v)}>
-              {showClassForm ? 'Cancel' : '+ Schedule a class'}
-            </button>
-          </div>
-          {showClassForm && (
-            <ClassForm
-              trainers={data?.trainers || []}
-              onDone={() => {
-                setShowClassForm(false)
-                loadClasses()
-              }}
-            />
-          )}
-          {classes.length === 0 && <p className="small" style={{ margin: '6px 0 0' }}>No upcoming classes scheduled.</p>}
-          {classes.map((c) => (
-            <ClassRow key={c.id} cls={c} onChanged={loadClasses} />
-          ))}
-        </div>
+function ClassesSection({ classes, trainers, showClassForm, setShowClassForm, loadClasses }) {
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <label className="label" style={{ margin: 0 }}>Upcoming classes</label>
+        <button type="button" className="text-link-btn" onClick={() => setShowClassForm((v) => !v)}>
+          {showClassForm ? 'Cancel' : '+ Schedule a class'}
+        </button>
       </div>
+      {showClassForm && (
+        <ClassForm
+          trainers={trainers}
+          onDone={() => {
+            setShowClassForm(false)
+            loadClasses()
+          }}
+        />
+      )}
+      {classes.length === 0 && <p className="small" style={{ margin: '6px 0 0' }}>No upcoming classes scheduled.</p>}
+      {classes.map((c) => (
+        <ClassRow key={c.id} cls={c} onChanged={loadClasses} />
+      ))}
     </div>
   )
 }
@@ -413,46 +563,15 @@ function ClassRow({ cls, onChanged }) {
     </div>
   )
 }
-const STAT_ICONS = {
-  members: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="9" cy="8" r="3.2" />
-      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
-      <circle cx="17.5" cy="9" r="2.4" />
-      <path d="M15.5 14.2c2.6.3 4.5 2 4.9 4.8" />
-    </svg>
-  ),
-  trainers: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="2" y1="12" x2="4.5" y2="12" />
-      <rect x="4.5" y="7" width="3" height="10" rx="1" />
-      <rect x="16.5" y="7" width="3" height="10" rx="1" />
-      <line x1="7.5" y1="12" x2="16.5" y2="12" />
-      <line x1="19.5" y1="12" x2="22" y2="12" />
-    </svg>
-  ),
-  checkins: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-      <path d="M8 14.5l2 2 4-4" />
-    </svg>
-  ),
-  memberships: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2.5" y="6" width="19" height="12" rx="2" />
-      <line x1="2.5" y1="10" x2="21.5" y2="10" />
-      <line x1="6" y1="14" x2="10" y2="14" />
-    </svg>
-  ),
-}
+
+const STAT_ICONS = NAV_ICONS
 
 function StatCards({ totalMembers, totalTrainers, todayCheckins, activeMemberships }) {
   const stats = [
     { key: 'members', label: 'Members', value: totalMembers, accent: 'var(--blue)' },
     { key: 'trainers', label: 'Trainers', value: totalTrainers, accent: 'var(--yellow)' },
-    { key: 'checkins', label: "Today's check-ins", value: todayCheckins, accent: 'var(--green)' },
-    { key: 'memberships', label: 'Active plans', value: activeMemberships, accent: 'var(--red)' },
+    { key: 'attendance', label: "Today's check-ins", value: todayCheckins, accent: 'var(--green)' },
+    { key: 'classes', label: 'Active plans', value: activeMemberships, accent: 'var(--red)' },
   ]
   return (
     <div className="stat-grid">

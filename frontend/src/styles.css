@@ -631,6 +631,19 @@ button { cursor: pointer; }
   margin: 12px 0;
 }
 
+.owner-mobile-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+@media (min-width: 880px) {
+  /* Desktop shows these same actions in the sidebar foot instead. */
+  .owner-mobile-actions {
+    display: none;
+  }
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
