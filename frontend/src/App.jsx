@@ -105,19 +105,23 @@ export default function App() {
   // session actually appears, before Main ever fetches the profile, so
   // it never briefly renders as a plain "individual" account.
   const [applyingPendingRole, setApplyingPendingRole] = useState(false)
-  useEffect(() => {
+  const [pendingRoleError, setPendingRoleError] = useState('')
+
+  function applyPendingRole() {
     if (!session) return
     const key = `countit_pending_role:${session.user.email.toLowerCase()}`
     const pending = localStorage.getItem(key)
     if (!pending) return
     setApplyingPendingRole(true)
+    setPendingRoleError('')
     saveRole(JSON.parse(pending))
-      .catch(() => {})
-      .finally(() => {
-        localStorage.removeItem(key)
-        setApplyingPendingRole(false)
-      })
-  }, [session])
+      .then(() => localStorage.removeItem(key)) // only cleared on success - a failed
+      // attempt keeps it so "Try again" (or the next login) can retry
+      // the exact same data instead of silently losing it.
+      .catch((e) => setPendingRoleError(e.message || 'Something went wrong setting up your account.'))
+      .finally(() => setApplyingPendingRole(false))
+  }
+  useEffect(applyPendingRole, [session])
 
   if (!configured) {
     return (
@@ -169,6 +173,21 @@ export default function App() {
 
   if (applyingPendingRole) {
     return <Splash />
+  }
+
+  if (pendingRoleError) {
+    return (
+      <div className="auth-wrap">
+        <div className="auth-logo">
+          <Tally size={40} />
+          <div className="auth-title">Count It</div>
+        </div>
+        <p className="error">Couldn't finish setting up your account: {pendingRoleError}</p>
+        <p className="small">Your gym code or details may not have been saved. You can try again, or contact your gym owner.</p>
+        <button className="btn btn-primary btn-block" onClick={applyPendingRole}>Try again</button>
+        <button className="btn btn-ghost btn-block" onClick={() => setPendingRoleError('')}>Continue without retrying</button>
+      </div>
+    )
   }
 
   return <Main user={session.user} />
