@@ -102,7 +102,8 @@ export default function OwnerDashboard({ user, profile }) {
               {data.trainers.map((t) => (
                 <div key={t.userId} className="quick-log-row">
                   <div className="quick-log-info">
-                    <div className="quick-log-name">{t.email || 'Trainer'}</div>
+                    <div className="quick-log-name">{t.fullName || t.email || 'Trainer'}</div>
+                    {t.fullName && t.email && <div className="quick-log-target">{t.email}</div>}
                     {t.contact && <div className="quick-log-target">{t.contact}</div>}
                   </div>
                 </div>
@@ -151,7 +152,9 @@ function MemberRow({ member, trainers, onAssigned, membership, onMembershipSaved
     <div>
       <div className="quick-log-row">
         <div className="quick-log-info">
-          <div className="quick-log-name">{member.email || 'Member'}</div>
+          <div className="quick-log-name">{member.fullName || member.email || 'Member'}</div>
+          {member.fullName && member.email && <div className="quick-log-target">{member.email}</div>}
+          {member.contact && <div className="quick-log-target">{member.contact}</div>}
           {membership && (
             <div className="quick-log-target" style={{ color: membership.active ? 'var(--green)' : 'var(--red)' }}>
               {membership.planMonths}-month plan · {membership.active ? `active until ${membership.endsOn}` : `expired ${membership.endsOn}`}
@@ -164,7 +167,7 @@ function MemberRow({ member, trainers, onAssigned, membership, onMembershipSaved
         <select className="input" style={{ width: 160 }} value={member.assignedTrainerId || ''} onChange={handleChange} disabled={busy}>
           <option value="">No trainer</option>
           {trainers.map((t) => (
-            <option key={t.userId} value={t.userId}>{t.email || 'Trainer'}</option>
+            <option key={t.userId} value={t.userId}>{t.fullName || t.email || 'Trainer'}</option>
           ))}
         </select>
       </div>

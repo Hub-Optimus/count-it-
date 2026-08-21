@@ -17,6 +17,7 @@ export default function Auth() {
   const [password, setPassword] = useState('')
   const [ownerName, setOwnerName] = useState('')
   const [gymName, setGymName] = useState('')
+  const [fullName, setFullName] = useState('')
   const [contact, setContact] = useState('')
   const [gymCode, setGymCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -38,6 +39,7 @@ export default function Auth() {
       role: accountType,
       ownerName: ownerName.trim() || null,
       gymName: gymName.trim() || null,
+      fullName: fullName.trim() || null,
       contact: contact.trim() || null,
       gymCode: gymCode.trim() || null,
     }
@@ -162,6 +164,13 @@ export default function Auth() {
         </div>
       )}
 
+      {mode === 'signup' && (accountType === 'individual' || accountType === 'trainer') && (
+        <div className="field">
+          <label className="label" htmlFor="full-name">Your name</label>
+          <input id="full-name" className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        </div>
+      )}
+
       <div className="field">
         <label className="label" htmlFor="email">Email</label>
         <input
@@ -191,9 +200,9 @@ export default function Auth() {
         </div>
       )}
 
-      {mode === 'signup' && (accountType === 'owner' || accountType === 'trainer') && (
+      {mode === 'signup' && (accountType === 'owner' || accountType === 'trainer' || accountType === 'individual') && (
         <div className="field">
-          <label className="label" htmlFor="contact">Contact number</label>
+          <label className="label" htmlFor="contact">Contact number{accountType === 'individual' ? ' (optional)' : ''}</label>
           <input
             id="contact"
             className="input"

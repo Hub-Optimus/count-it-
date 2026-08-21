@@ -58,7 +58,10 @@ export default function TrainerDashboard({ user }) {
             {clients.map((c) => (
               <div key={c.userId} className="quick-log-row">
                 <div className="quick-log-info">
-                  <div className="quick-log-name">{c.email || 'Member'}</div>
+                  <div className="quick-log-name">{c.fullName || c.email || 'Member'}</div>
+                  {c.fullName && (c.email || c.contact) && (
+                    <div className="quick-log-target">{[c.email, c.contact].filter(Boolean).join(' · ')}</div>
+                  )}
                   <div className="quick-log-target">
                     {c.totalSessions} session{c.totalSessions === 1 ? '' : 's'} logged
                     {c.lastWorkoutDate ? ` · last on ${c.lastWorkoutDate}` : ' · nothing logged yet'}
