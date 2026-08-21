@@ -235,7 +235,7 @@ _PROFILE_COLUMNS = (
     "target_weight_unit, activity_level, experience_level, train_locations, has_trainer, "
     "injury_notes, workout_days_per_week, reminders_enabled, rest_day_nudges_enabled, "
     "dietary_prefs, onboarding_completed_at, "
-    "role, owner_name, gym_name, contact, owner_gym_code, linked_gym_code, assigned_trainer_id"
+    "role, owner_name, gym_name, contact, owner_gym_code, linked_gym_code, assigned_trainer_id, full_name"
 )
 
 
@@ -663,6 +663,7 @@ def save_role(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
         raise HTTPException(status_code=400, detail="Invalid role.")
 
     payload = {"user_id": ctx.user_id, "role": role, "updated_at": now_iso()}
+    payload["full_name"] = body.get("fullName")
 
     if role == "owner":
         payload["owner_name"] = body.get("ownerName")
@@ -704,7 +705,7 @@ def fetch_gym_members(ctx: AuthCtx = Depends(get_auth)):
 
     linked = (
         ctx.client.table("profiles")
-        .select("user_id, role, contact, assigned_trainer_id")
+        .select("user_id, role, full_name, contact, assigned_trainer_id")
         .eq("linked_gym_code", gym_code)
         .execute()
     )
@@ -713,7 +714,7 @@ def fetch_gym_members(ctx: AuthCtx = Depends(get_auth)):
     emails_by_id = fetch_emails_for_users(ctx.client, user_ids)
 
     trainers = [
-        {"userId": r["user_id"], "email": emails_by_id.get(r["user_id"]), "contact": r["contact"]}
+        {"userId": r["user_id"], "email": emails_by_id.get(r["user_id"]), "fullName": r.get("full_name"), "contact": r["contact"]}
         for r in rows
         if r["role"] == "trainer"
     ]
@@ -721,6 +722,8 @@ def fetch_gym_members(ctx: AuthCtx = Depends(get_auth)):
         {
             "userId": r["user_id"],
             "email": emails_by_id.get(r["user_id"]),
+            "fullName": r.get("full_name"),
+            "contact": r.get("contact"),
             "assignedTrainerId": r["assigned_trainer_id"],
         }
         for r in rows
@@ -794,13 +797,16 @@ def fetch_trainer_clients(ctx: AuthCtx = Depends(get_auth)):
 
     clients = (
         ctx.client.table("profiles")
-        .select("user_id")
+        .select("user_id, full_name, contact")
         .eq("assigned_trainer_id", ctx.user_id)
         .execute()
     )
-    client_ids = [c["user_id"] for c in (clients.data or [])]
+    client_rows = clients.data or []
+    client_ids = [c["user_id"] for c in client_rows]
     if not client_ids:
         return []
+    names_by_id = {c["user_id"]: c.get("full_name") for c in client_rows}
+    contacts_by_id = {c["user_id"]: c.get("contact") for c in client_rows}
 
     emails_by_id = fetch_emails_for_users(ctx.client, client_ids)
 
@@ -822,6 +828,8 @@ def fetch_trainer_clients(ctx: AuthCtx = Depends(get_auth)):
             {
                 "userId": uid,
                 "email": emails_by_id.get(uid),
+                "fullName": names_by_id.get(uid),
+                "contact": contacts_by_id.get(uid),
                 "totalSessions": len(dates),
                 "lastWorkoutDate": dates[0] if dates else None,
             }
@@ -1024,4 +1032,3 @@ def fetch_gym_memberships(ctx: AuthCtx = Depends(get_auth)):
         }
         for r in rows
     ]
-    
