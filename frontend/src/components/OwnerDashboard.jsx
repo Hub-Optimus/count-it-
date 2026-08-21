@@ -67,6 +67,15 @@ export default function OwnerDashboard({ user, profile }) {
           <button className="chip" onClick={() => setView('workouts')}>My Workouts</button>
         </div>
 
+        <StatCards
+          totalMembers={data?.members.length}
+          totalTrainers={data?.trainers.length}
+          todayCheckins={attendance?.todayCount}
+          activeMemberships={memberships.filter((m) => m.active).length}
+        />
+
+        {attendance && attendance.recent.length > 0 && <AttendanceChart recent={attendance.recent} />}
+
         <div className="card">
           <label className="label">Gym code</label>
           <p className="small" style={{ margin: '0 0 10px' }}>
@@ -401,6 +410,102 @@ function ClassRow({ cls, onChanged }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+const STAT_ICONS = {
+  members: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
+      <circle cx="17.5" cy="9" r="2.4" />
+      <path d="M15.5 14.2c2.6.3 4.5 2 4.9 4.8" />
+    </svg>
+  ),
+  trainers: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="2" y1="12" x2="4.5" y2="12" />
+      <rect x="4.5" y="7" width="3" height="10" rx="1" />
+      <rect x="16.5" y="7" width="3" height="10" rx="1" />
+      <line x1="7.5" y1="12" x2="16.5" y2="12" />
+      <line x1="19.5" y1="12" x2="22" y2="12" />
+    </svg>
+  ),
+  checkins: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <path d="M8 14.5l2 2 4-4" />
+    </svg>
+  ),
+  memberships: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <line x1="2.5" y1="10" x2="21.5" y2="10" />
+      <line x1="6" y1="14" x2="10" y2="14" />
+    </svg>
+  ),
+}
+
+function StatCards({ totalMembers, totalTrainers, todayCheckins, activeMemberships }) {
+  const stats = [
+    { key: 'members', label: 'Members', value: totalMembers, accent: 'var(--blue)' },
+    { key: 'trainers', label: 'Trainers', value: totalTrainers, accent: 'var(--yellow)' },
+    { key: 'checkins', label: "Today's check-ins", value: todayCheckins, accent: 'var(--green)' },
+    { key: 'memberships', label: 'Active plans', value: activeMemberships, accent: 'var(--red)' },
+  ]
+  return (
+    <div className="stat-grid">
+      {stats.map((s) => (
+        <div className="stat-card" key={s.key}>
+          <span className="stat-icon" style={{ color: s.accent, borderColor: s.accent }}>{STAT_ICONS[s.key]}</span>
+          <span className="stat-value">{s.value ?? '–'}</span>
+          <span className="stat-label">{s.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AttendanceChart({ recent }) {
+  // Aggregate the last 7 days of check-ins client-side from the same
+  // "recent" rows the check-in list already uses - no separate
+  // endpoint needed for what's just a different view of the same data.
+  const days = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    days.push(d.toISOString().slice(0, 10))
+  }
+  const countByDay = {}
+  for (const r of recent) {
+    countByDay[r.date] = (countByDay[r.date] || 0) + 1
+  }
+  const counts = days.map((d) => countByDay[d] || 0)
+  const max = Math.max(1, ...counts)
+
+  return (
+    <div className="card">
+      <label className="label">Attendance, last 7 days</label>
+      <div className="attendance-chart">
+        {days.map((d, i) => {
+          const count = counts[i]
+          const dayLabel = new Date(d + 'T00:00:00').toLocaleDateString([], { weekday: 'short' })
+          const isToday = i === days.length - 1
+          return (
+            <div className="attendance-bar-col" key={d}>
+              <span className="attendance-bar-count">{count > 0 ? count : ''}</span>
+              <div className="attendance-bar-track">
+                <div
+                  className={`attendance-bar-fill ${isToday ? 'today' : ''}`}
+                  style={{ height: `${Math.max(4, (count / max) * 100)}%` }}
+                />
+              </div>
+              <span className="attendance-bar-label">{dayLabel}</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
