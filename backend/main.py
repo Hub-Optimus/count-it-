@@ -1045,3 +1045,155 @@ def fetch_gym_memberships(ctx: AuthCtx = Depends(get_auth)):
         }
         for r in rows
     ]
+
+
+# ---------------------------------------------------------- class booking
+
+@app.post("/api/gym/classes")
+def create_class(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
+    me = (
+        ctx.client.table("profiles")
+        .select("role, owner_gym_code")
+        .eq("user_id", ctx.user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not me or not me.data or me.data.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only a gym owner can schedule classes.")
+    gym_code = me.data.get("owner_gym_code")
+
+    name = (body.get("name") or "").strip()
+    starts_at = body.get("startsAt")
+    duration_minutes = body.get("durationMinutes")
+    capacity = body.get("capacity")
+    trainer_id = body.get("trainerId") or None
+
+    if not name or not starts_at or not duration_minutes or not capacity:
+        raise HTTPException(status_code=400, detail="name, startsAt, durationMinutes, and capacity are required.")
+    if duration_minutes <= 0 or capacity <= 0:
+        raise HTTPException(status_code=400, detail="Duration and capacity must be positive numbers.")
+
+    if trainer_id:
+        trainer_row = (
+            ctx.client.table("profiles")
+            .select("user_id")
+            .eq("user_id", trainer_id)
+            .eq("linked_gym_code", gym_code)
+            .eq("role", "trainer")
+            .maybe_single()
+            .execute()
+        )
+        if not trainer_row or not trainer_row.data:
+            raise HTTPException(status_code=404, detail="That trainer isn't part of your gym.")
+
+    res = (
+        ctx.client.table("gym_classes")
+        .insert(
+            {
+                "gym_code": gym_code,
+                "name": name,
+                "trainer_id": trainer_id,
+                "starts_at": starts_at,
+                "duration_minutes": duration_minutes,
+                "capacity": capacity,
+                "created_by": ctx.user_id,
+            }
+        )
+        .execute()
+    )
+    return res.data[0] if res.data else {"ok": True}
+
+
+@app.get("/api/gym/classes")
+def fetch_gym_classes(ctx: AuthCtx = Depends(get_auth)):
+    # RLS scopes this to the caller's own gym automatically, whether
+    # they're the owner, a trainer, or a member linked to it.
+    now = datetime.now(timezone.utc).isoformat()
+    res = (
+        ctx.client.table("gym_classes")
+        .select("id, name, trainer_id, starts_at, duration_minutes, capacity")
+        .gte("starts_at", now)
+        .order("starts_at")
+        .execute()
+    )
+    classes = res.data or []
+    class_ids = [c["id"] for c in classes]
+    trainer_ids = list({c["trainer_id"] for c in classes if c.get("trainer_id")})
+
+    counts_by_class = {}
+    my_bookings = set()
+    if class_ids:
+        bookings = (
+            ctx.client.table("class_bookings")
+            .select("class_id, user_id")
+            .in_("class_id", class_ids)
+            .execute()
+        )
+        for b in bookings.data or []:
+            counts_by_class[b["class_id"]] = counts_by_class.get(b["class_id"], 0) + 1
+            if b["user_id"] == ctx.user_id:
+                my_bookings.add(b["class_id"])
+
+    trainer_names = fetch_emails_for_users(ctx.client, trainer_ids) if trainer_ids else {}
+
+    return [
+        {
+            "id": c["id"],
+            "name": c["name"],
+            "trainerId": c.get("trainer_id"),
+            "trainerEmail": trainer_names.get(c["trainer_id"]) if c.get("trainer_id") else None,
+            "startsAt": c["starts_at"],
+            "durationMinutes": c["duration_minutes"],
+            "capacity": c["capacity"],
+            "bookedCount": counts_by_class.get(c["id"], 0),
+            "isBooked": c["id"] in my_bookings,
+        }
+        for c in classes
+    ]
+
+
+@app.delete("/api/gym/classes/{class_id}")
+def delete_class(class_id: str, ctx: AuthCtx = Depends(get_auth)):
+    # RLS ("Owners manage their gym's classes") rejects this outright
+    # if the class doesn't belong to the caller's own gym.
+    ctx.client.table("gym_classes").delete().eq("id", class_id).execute()
+    return {"ok": True}
+
+
+@app.get("/api/gym/classes/{class_id}/roster")
+def fetch_class_roster(class_id: str, ctx: AuthCtx = Depends(get_auth)):
+    res = ctx.client.table("class_bookings").select("user_id, booked_at").eq("class_id", class_id).execute()
+    rows = res.data or []
+    user_ids = [r["user_id"] for r in rows]
+    emails_by_id = fetch_emails_for_users(ctx.client, user_ids)
+    return [
+        {"userId": r["user_id"], "email": emails_by_id.get(r["user_id"]), "bookedAt": r["booked_at"]}
+        for r in rows
+    ]
+
+
+@app.post("/api/classes/{class_id}/book")
+def book_class(class_id: str, ctx: AuthCtx = Depends(get_auth)):
+    cls = ctx.client.table("gym_classes").select("capacity").eq("id", class_id).maybe_single().execute()
+    if not cls or not cls.data:
+        raise HTTPException(status_code=404, detail="Class not found.")
+
+    existing = ctx.client.table("class_bookings").select("id", count="exact").eq("class_id", class_id).execute()
+    booked_count = existing.count or 0
+    if booked_count >= cls.data["capacity"]:
+        raise HTTPException(status_code=400, detail="That class is full.")
+
+    try:
+        ctx.client.table("class_bookings").insert({"class_id": class_id, "user_id": ctx.user_id}).execute()
+    except APIError as e:
+        # unique(class_id, user_id) - the friendly way to say "already booked"
+        if "duplicate key" in (e.message or "").lower():
+            raise HTTPException(status_code=400, detail="You've already booked this class.")
+        raise
+    return {"ok": True}
+
+
+@app.delete("/api/classes/{class_id}/book")
+def cancel_booking(class_id: str, ctx: AuthCtx = Depends(get_auth)):
+    ctx.client.table("class_bookings").delete().eq("class_id", class_id).eq("user_id", ctx.user_id).execute()
+    return {"ok": True}
