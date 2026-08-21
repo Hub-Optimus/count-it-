@@ -342,3 +342,53 @@ export async function fetchGymMemberships() {
   if (mock) return mock.memberships ?? []
   return api.get('/api/gym/memberships')
 }
+
+// ---- class booking ----
+
+export async function createGymClass({ name, trainerId, startsAt, durationMinutes, capacity }) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { name, trainerId, startsAt, durationMinutes, capacity }
+    return { ok: true }
+  }
+  return api.post('/api/gym/classes', { name, trainerId, startsAt, durationMinutes, capacity })
+}
+
+export async function fetchGymClasses() {
+  const mock = testMock()
+  if (mock) return mock.gymClasses ?? []
+  return api.get('/api/gym/classes')
+}
+
+export async function deleteGymClass(classId) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { deletedClassId: classId }
+    return
+  }
+  await api.del(`/api/gym/classes/${classId}`)
+}
+
+export async function fetchClassRoster(classId) {
+  const mock = testMock()
+  if (mock) return mock.classRoster ?? []
+  return api.get(`/api/gym/classes/${classId}/roster`)
+}
+
+export async function bookClass(classId) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { bookedClassId: classId }
+    return
+  }
+  await api.post(`/api/classes/${classId}/book`)
+}
+
+export async function cancelClassBooking(classId) {
+  const mock = testMock()
+  if (mock) {
+    window.__TEST_LAST_SAVE__ = { cancelledClassId: classId }
+    return
+  }
+  await api.del(`/api/classes/${classId}/book`)
+}

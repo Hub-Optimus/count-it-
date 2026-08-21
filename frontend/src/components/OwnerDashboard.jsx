@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { fetchGymMembers, assignTrainer, fetchGymAttendance, createMembership, fetchGymMemberships } from '../lib/db'
+import { fetchGymMembers, assignTrainer, fetchGymAttendance, createMembership, fetchGymMemberships, createGymClass, fetchGymClasses, deleteGymClass, fetchClassRoster } from '../lib/db'
 import { Tally } from './TabBar'
 import { Main } from '../App'
 
@@ -18,6 +18,11 @@ export default function OwnerDashboard({ user, profile }) {
   const [memberships, setMemberships] = useState([])
   const loadMemberships = () => fetchGymMemberships().then(setMemberships).catch(() => {})
   useEffect(() => { loadMemberships() }, [])
+
+  const [classes, setClasses] = useState([])
+  const loadClasses = () => fetchGymClasses().then(setClasses).catch(() => {})
+  useEffect(() => { loadClasses() }, [])
+  const [showClassForm, setShowClassForm] = useState(false)
 
   async function copyCode() {
     if (!data?.gymCode) return
@@ -126,6 +131,28 @@ export default function OwnerDashboard({ user, profile }) {
             </div>
           </>
         )}
+
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <label className="label" style={{ margin: 0 }}>Upcoming classes</label>
+            <button type="button" className="text-link-btn" onClick={() => setShowClassForm((v) => !v)}>
+              {showClassForm ? 'Cancel' : '+ Schedule a class'}
+            </button>
+          </div>
+          {showClassForm && (
+            <ClassForm
+              trainers={data?.trainers || []}
+              onDone={() => {
+                setShowClassForm(false)
+                loadClasses()
+              }}
+            />
+          )}
+          {classes.length === 0 && <p className="small" style={{ margin: '6px 0 0' }}>No upcoming classes scheduled.</p>}
+          {classes.map((c) => (
+            <ClassRow key={c.id} cls={c} onChanged={loadClasses} />
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -235,6 +262,145 @@ function MembershipForm({ memberUserId, onDone }) {
       <button className="btn btn-primary btn-block" onClick={submit} disabled={busy}>
         {busy ? 'Saving…' : 'Mark as paid (cash) & activate'}
       </button>
+    </div>
+  )
+}
+
+function ClassForm({ trainers, onDone }) {
+  const [name, setName] = useState('')
+  const [trainerId, setTrainerId] = useState('')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [duration, setDuration] = useState(60)
+  const [capacity, setCapacity] = useState(10)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    setError('')
+    if (!name.trim() || !date || !time) {
+      setError('Fill in the class name, date, and time.')
+      return
+    }
+    const startsAt = new Date(`${date}T${time}`)
+    if (Number.isNaN(startsAt.getTime())) {
+      setError('That date/time looks invalid.')
+      return
+    }
+    setBusy(true)
+    try {
+      await createGymClass({
+        name: name.trim(),
+        trainerId: trainerId || null,
+        startsAt: startsAt.toISOString(),
+        durationMinutes: Number(duration),
+        capacity: Number(capacity),
+      })
+      onDone()
+    } catch (e) {
+      setError(e.message || 'Could not schedule that class. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card" style={{ margin: '10px 0' }}>
+      <div className="field">
+        <label className="label" htmlFor="class-name">Class name</label>
+        <input id="class-name" className="input" placeholder="e.g. Yoga" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      {trainers.length > 0 && (
+        <div className="field">
+          <label className="label" htmlFor="class-trainer">Trainer (optional)</label>
+          <select id="class-trainer" className="input" value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
+            <option value="">No trainer assigned</option>
+            {trainers.map((t) => (
+              <option key={t.userId} value={t.userId}>{t.fullName || t.email || 'Trainer'}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="field">
+        <label className="label" htmlFor="class-date">Date</label>
+        <input id="class-date" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </div>
+      <div className="field">
+        <label className="label" htmlFor="class-time">Time</label>
+        <input id="class-time" className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+      </div>
+      <div className="field">
+        <label className="label" htmlFor="class-duration">Duration (minutes)</label>
+        <input id="class-duration" className="input" type="number" min="1" value={duration} onChange={(e) => setDuration(e.target.value)} />
+      </div>
+      <div className="field">
+        <label className="label" htmlFor="class-capacity">Capacity (max members)</label>
+        <input id="class-capacity" className="input" type="number" min="1" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+      </div>
+      {error && <p className="error">{error}</p>}
+      <button className="btn btn-primary btn-block" onClick={submit} disabled={busy}>
+        {busy ? 'Scheduling…' : 'Schedule class'}
+      </button>
+    </div>
+  )
+}
+
+function ClassRow({ cls, onChanged }) {
+  const [showRoster, setShowRoster] = useState(false)
+  const [roster, setRoster] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  function toggleRoster() {
+    if (showRoster) {
+      setShowRoster(false)
+      return
+    }
+    setShowRoster(true)
+    if (roster === null) {
+      fetchClassRoster(cls.id).then(setRoster).catch(() => setRoster([]))
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Cancel "${cls.name}"? Members who booked will lose their spot.`)) return
+    setBusy(true)
+    try {
+      await deleteGymClass(cls.id)
+      onChanged()
+    } catch (e) {
+      window.alert(e.message || 'Could not cancel that class.')
+      setBusy(false)
+    }
+  }
+
+  const when = new Date(cls.startsAt)
+
+  return (
+    <div className="quick-log-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+        <div className="quick-log-info">
+          <div className="quick-log-name">{cls.name}</div>
+          <div className="quick-log-target">
+            {when.toLocaleDateString()} · {when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {cls.durationMinutes} min
+          </div>
+          <div className="quick-log-target">
+            {cls.bookedCount}/{cls.capacity} booked{cls.trainerEmail ? ` · ${cls.trainerEmail}` : ''}
+          </div>
+          <button type="button" className="text-link-btn" style={{ padding: 0, marginTop: 2 }} onClick={toggleRoster}>
+            {showRoster ? 'Hide roster' : 'View roster'}
+          </button>
+        </div>
+        <button type="button" className="btn btn-ghost" onClick={handleDelete} disabled={busy}>Cancel</button>
+      </div>
+      {showRoster && (
+        <div style={{ marginTop: 8, paddingLeft: 4 }}>
+          {roster === null && <p className="small">Loading…</p>}
+          {roster && roster.length === 0 && <p className="small">No one has booked yet.</p>}
+          {roster && roster.map((r) => (
+            <p key={r.userId} className="small" style={{ margin: '2px 0' }}>{r.email || 'Member'}</p>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

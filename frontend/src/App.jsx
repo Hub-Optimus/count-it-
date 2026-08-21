@@ -11,6 +11,7 @@ import WorkoutList from './components/WorkoutList'
 import WorkoutEditor from './components/WorkoutEditor'
 import SidePanel from './components/SidePanel'
 import Onboarding from './components/Onboarding'
+import ClassSchedule from './components/ClassSchedule'
 import OwnerDashboard from './components/OwnerDashboard'
 import TrainerDashboard from './components/TrainerDashboard'
 
@@ -470,7 +471,7 @@ export function Main({ user, skipRoleRouting = false }) {
           </div>
         </div>
       )}
-      <TabBar tab={tab} onChange={setTab} user={user} sessionCount={workouts?.length} showRoadmap={Boolean(roadmapProgress)} />
+      <TabBar tab={tab} onChange={setTab} user={user} sessionCount={workouts?.length} showRoadmap={Boolean(roadmapProgress)} showClasses={Boolean(profile?.linked_gym_code)} />
       <div className="app">
       <header className="app-header">
         <span className="brand">
@@ -537,6 +538,8 @@ export function Main({ user, skipRoleRouting = false }) {
       {tab === 'progress' && (
         <ProgressTab user={user} workouts={workouts ?? []} profile={profile} />
       )}
+
+      {tab === 'classes' && <ClassSchedule />}
 
       {tab === 'settings' && (
         <Suspense fallback={<p className="empty">Loading…</p>}>
