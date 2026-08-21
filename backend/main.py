@@ -674,8 +674,9 @@ def save_role(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
         payload["contact"] = body.get("contact")
         gym_code = (body.get("gymCode") or "").strip().upper() or None
         if gym_code:
+            lookup_client = admin_client() or ctx.client
             owner_row = (
-                ctx.client.table("profiles")
+                lookup_client.table("profiles")
                 .select("user_id")
                 .eq("owner_gym_code", gym_code)
                 .eq("role", "owner")
@@ -847,8 +848,9 @@ def join_gym(body: dict = Body(...), ctx: AuthCtx = Depends(get_auth)):
     gym_code = (body.get("gymCode") or "").strip().upper()
     if not gym_code:
         raise HTTPException(status_code=400, detail="Enter a gym code.")
+    lookup_client = admin_client() or ctx.client
     owner_row = (
-        ctx.client.table("profiles")
+        lookup_client.table("profiles")
         .select("user_id, gym_name")
         .eq("owner_gym_code", gym_code)
         .eq("role", "owner")
@@ -937,6 +939,17 @@ def fetch_gym_attendance(ctx: AuthCtx = Depends(get_auth)):
             for r in data
         ],
     }
+
+
+def admin_client() -> Client | None:
+    # Service-role client, bypasses RLS. Needed for the handful of
+    # lookups where the caller has no established relationship yet to
+    # the row they're checking - most notably validating a gym code
+    # during signup, before the caller is linked to anything and so has
+    # no RLS-granted visibility into the owner's row at all.
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
 def fetch_emails_for_users(client: Client, user_ids: list) -> dict:
